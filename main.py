@@ -30,9 +30,11 @@ class ElectronicsSimulation:
 	ampSpec = None
 	# pulse shape
 	pulseShape = None
+	# time offset for nice plotting
+	plotOffset = 0
 	
-	def __init__(self, f_sample = 0.25, oversamp = 10, t_ext = 100, offset = 10, noise = 0.8,
-			gain = 15, jitter = None,
+	def __init__(self, f_sample = 0.25, oversamp = 10, t_ext = 200, offset = 10, noise = 0.8,
+			gain = 15, jitter = None, debugPlots = False,
 			timeSpec = None, ampSpec = None, pulseShape = None):
 		self.f_sample = f_sample
 		self.t_sample = 1/f_sample
@@ -43,13 +45,24 @@ class ElectronicsSimulation:
 		self.noise = noise
 		self.gain = gain
 		self.jitter = jitter
-		#TODO load from file
+		self.debugPlots = debugPlots
+		#load from file or simulate
 		if timeSpec == None:
 			self.timeSpec = self.simulateTimeSpectrum()
+		elif type(timeSpec) is str:
+			self.timeSpec = np.loadtxt(timeSpec, unpack=True)
+			if self.timeSpec.ndim == 1:
+				hist, bins = np.histogram(self.timeSpec)
+				#TODO optimize
+				self.timeSpec = (bins[:-1], hist)
+		else:
+			self.timeSpec = timeSpec
 		if ampSpec == None:
 			self.ampSpec = self.simulateAmplitudeSpectrum()
 		elif type(ampSpec) is str:
 			self.ampSpec = np.loadtxt(ampSpec, unpack=True)
+		else:
+			self.ampSpec = ampSpec
 		if pulseShape == None:
 			self.pulseShape = self.simulatePulseShape()
 		elif type(pulseShape) is str:
@@ -57,20 +70,24 @@ class ElectronicsSimulation:
 			# ensure correct sampling
 			step = ps[0][1]-ps[0][0]
 			ps, t = resample(ps[1], int(step/self.t_step*ps[1].shape[0]), ps[0])
-			#TODO center to 0
 			self.pulseShape = (t,ps)
+			# offset from center (for plots only)
+			self.plotOffset = (t[-1]+t[0])/2
+		else:
+			self.pulseShape = pulseShape
 			
 		# figures for debugging
-		plt.plot(*self.pulseShape)
-		plt.title("Pulse shape")
-		plt.figure()
-		plt.subplot(1,2,1)
-		plt.plot(*self.timeSpec)
-		plt.title("Time spectrum")
-		plt.subplot(1,2,2)
-		plt.plot(*self.ampSpec)
-		plt.title("Amplitude spectrum")
-		plt.figure()
+		if self.debugPlots:
+			plt.plot(*self.pulseShape)
+			plt.title("Pulse shape")
+			plt.figure()
+			plt.subplot(1,2,1)
+			plt.plot(*self.timeSpec)
+			plt.title("Time spectrum")
+			plt.subplot(1,2,2)
+			plt.plot(*self.ampSpec)
+			plt.title("Amplitude spectrum")
+			plt.figure()
 	
 	# simulates PE times
 	# npe - number of photo electrons
@@ -102,7 +119,7 @@ class ElectronicsSimulation:
 		t_max = peTimes.max()+self.t_ext
 		times = np.arange((int(t_max-t_min)/self.t_step))*self.t_step+t_min
 		# get distributions of spectra
-		#TODO avoid errors/optimize?/reuse
+		#TODO avoid errors/optimize?/reuse?
 		sx = self.timeSpec[0]
 		bins = np.append(sx, sx[-1]+sx[1]-sx[0])
 		timeDist = rv_histogram((self.timeSpec[1],bins))
@@ -148,16 +165,16 @@ class ElectronicsSimulation:
 # --- start ---
 plt.ion()
 # init class
-esim = ElectronicsSimulation(ampSpec = "data/bb3_1700v_spe.txt") #, pulseShape="data/bb3_1700v_pulse_shape.txt")
+esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt", debugPlots=True)
 # get PE times
-peTimes = esim.getPETimes("data/bb3_1700v_timing.txt")
+peTimes = esim.getPETimes()
 plt.scatter(peTimes,np.zeros(peTimes.shape))
 # simulate pmt
 times, signal = esim.simulatePMTSignal(peTimes)
 plt.plot(times, signal)
 # convolve with pulse shape
 signal = esim.simulateElectronics(signal)
-plt.plot(times, signal)
+plt.plot(times+esim.plotOffset, signal)
 plt.figure()
 
 # make samples
