@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import norm, rv_histogram, randint
 from scipy.signal import resample
+import uproot
 
 class ElectronicsSimulation:
 	"""
@@ -327,11 +328,28 @@ class ElectronicsSimulation:
 # --- start ---
 if __name__ == "__main__":
 	# init class
-	esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt", debugPlots=True)
+	esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt")
 	# get PE times
-	peTimes = esim.getPETimes()
+	events = uproot.lazy("data/DAT000001.root:XCDF")
+	for pmtIds, peTimes in zip(events["HAWCSim.PE.PMTID"], events["HAWCSim.PE.Time"]):
+		# plot all
+		peTimes = peTimes.to_numpy()
+		pmtIds = pmtIds.to_numpy()
+		plt.figure(1)
+		plt.scatter(peTimes, pmtIds, c="grey")
+		# pick a few
+		pmts = np.random.choice(pmtIds, 5)
+		for pmt in pmts:
+			pets = peTimes[pmtIds == pmt]
+			plt.figure(1)
+			plt.scatter(pets,pmt*np.ones(pets.shape))
+			times, samples = esim.simulateAll(pets)
+			plt.figure(2)
+			plt.scatter(pets,np.zeros(pets.shape))
+			plt.plot(times+esim.plotOffset, samples)
+		break
 	# simulate
-	esim.simulateAll(peTimes)
+	#esim.simulateAll(peTimes)
 
 	plt.show()
 
