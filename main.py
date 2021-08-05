@@ -5,46 +5,61 @@ from matplotlib import pyplot as plt
 from scipy.stats import norm, rv_histogram, randint
 from scipy.signal import resample
 
-class ElectronicsSimulation:	
-	# sampling rate 1/ns
-	f_sample = 250
-	# sampling time ns
-	t_sample = 1/f_sample
-	# oversampling factor
-	oversamp = 10
-	# time step of signal ns
-	t_step = t_sample/oversamp
-	# extension time ns (time before first/after last event)
-	t_ext = 5
-	# ADC offset LSB
-	offset = 10
-	# noise std. dev. LSB
-	noise = 0.8
-	# ADC gain LSB
-	gain = 15
-	# ADC jitter
-	jitter = None
-	# time spectrum
-	timeSpec = None
-	# time distribution
-	timeDist = None
-	# amplitude spectrum
-	ampSpec = None
-	# amplitude distribution
-	ampDist = None
-	# pulse shape
-	pulseShape = None
-	# time offset for nice plotting
-	plotOffset = 0
+class ElectronicsSimulation:
+	"""
+	Class to simulate PMT and ADC response to photo electron events.
+
+	Attributes
+	----------
+	f_sample : float
+		sampling rate of ADC in 1/ns
+	t_sample : float
+		sampling time of ADC in ns
+	oversamp : int
+		oversampling factor
+	t_step : float
+		time step for simulation in ns (`t_step=t_sample/oversamp`)
+	t_pad : float
+		padding before first and after last event in ns
+	offset : int
+		ADC offset in LSB
+	gain : int
+		ADC gain (scale factor of normalized amplitude) in LSB
+	noise : float
+		standard deviation of gaussian noise in LSB
+	jitter : int or None
+		offset of ADC samples relative to simulation times, `None` for random jitter
+	timeSpec : tuple of array_like
+		PE delay times in ns and their probabilities
+	timeDist : rv_histogram
+		distribution of PE delay times
+	ampSpec : tuple of array_like
+		PE amplitudes in normalized units and their probabilities
+	ampsDist : rv_histogram
+		distribution of PE amplitudes
+	pulseShape : tuple of array_like
+		times in ns and amplitudes in normalized units of pulse shape
+	plotOffset : float
+		time offset for nice plotting in ns
+	debugPlots : bool
+		plot intermediate results if `True`
+	"""
 	
-	def __init__(self, f_sample = 0.25, oversamp = 10, t_ext = 200, offset = 10, noise = 0.8,
+	def __init__(self, f_sample = 0.25, oversamp = 10, t_pad = 200, offset = 10, noise = 0.8,
 			gain = 15, jitter = None, debugPlots = False,
 			timeSpec = None, ampSpec = None, pulseShape = None):
+		"""
+		Initializes instances of ElectronicsSimulation class.
+
+		`timeSpec`, `ampSpec` and `pulseShape` can have special values:
+			'None' -- simulates gaussian spectra/pulse shape
+			string -- loads spectra/pulse shape from file with given name
+		"""
 		self.f_sample = f_sample
 		self.t_sample = 1/f_sample
 		self.oversamp = oversamp
 		self.t_step = self.t_sample/oversamp
-		self.t_ext = t_ext
+		self.t_pad = t_pad
 		self.offset = offset
 		self.noise = noise
 		self.gain = gain
@@ -57,13 +72,14 @@ class ElectronicsSimulation:
 			self.timeSpec = np.loadtxt(timeSpec, unpack=True)
 			if self.timeSpec.ndim == 1:
 				binCnt = int((self.timeSpec.max()-self.timeSpec.min())/self.t_step)
-				hist, bins = np.histogram(self.timeSpec, binCnt, normed=True)
+				hist, bins = np.histogram(self.timeSpec, binCnt, density=True)
 				self.timeSpec = (bins[:-1], hist)
 				self.timeDist = rv_histogram((hist,bins))
 		else:
 			self.timeSpec = timeSpec
 		if ampSpec == None:
 			self.ampSpec = self.simulateAmplitudeSpectrum()
+			#TODO histogram?
 		elif type(ampSpec) is str:
 			self.ampSpec = np.loadtxt(ampSpec, unpack=True)
 		else:
@@ -82,14 +98,12 @@ class ElectronicsSimulation:
 		else:
 			self.pulseShape = pulseShape
 		# get distributions of spectra
-		if self.timeDist == None:
-			sx = self.timeSpec[0]
-			bins = np.append(sx, sx[-1]+sx[1]-sx[0])
-			self.timeDist = rv_histogram((self.timeSpec[1],bins))
-		if self.ampDist == None:
-			sx = self.ampSpec[0]
-			bins = np.append(sx, sx[-1]+sx[1]-sx[0])
-			self.ampDist = rv_histogram((self.ampSpec[1],bins))
+		sx = self.timeSpec[0]
+		bins = np.append(sx, sx[-1]+sx[1]-sx[0])
+		self.timeDist = rv_histogram((self.timeSpec[1],bins))
+		sx = self.ampSpec[0]
+		bins = np.append(sx, sx[-1]+sx[1]-sx[0])
+		self.ampDist = rv_histogram((self.ampSpec[1],bins))
 			
 		# figures for debugging
 		if self.debugPlots:
@@ -136,8 +150,8 @@ class ElectronicsSimulation:
 	#	signal array au
 	def simulatePMTSignal(self, peTimes):
 		# make discrete times
-		t_min = peTimes.min()-self.t_ext
-		t_max = peTimes.max()+self.t_ext
+		t_min = peTimes.min()-self.t_pad
+		t_max = peTimes.max()+self.t_pad
 		times = np.arange((int(t_max-t_min)/self.t_step))*self.t_step+t_min
 		# make signal
 		signal = np.zeros(times.shape)
@@ -149,7 +163,7 @@ class ElectronicsSimulation:
 	# simulates the elctronics
 	# returns signal array au
 	def simulateElectronics(self, signal):
-		return np.convolve(signal, self.pulseShape[1], 'same') #TODO optimize?
+		return np.convolve(signal, self.pulseShape[1], 'same')
 	
 	# simulate ADC
 	# returns times array ns
@@ -185,7 +199,7 @@ class ElectronicsSimulation:
 			plt.ylabel("A/LSB")
 	
 	def getPETimes(self, source = None):	
-		#TODO load from file
+		#TODO remove
 		if source == None:
 			peTimes = self.simulatePETimes()
 		elif type(source) is str:
@@ -197,15 +211,15 @@ class ElectronicsSimulation:
 
 
 # --- start ---
-#plt.ion()
-# init class
-esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt", debugPlots=True)
-# get PE times
-peTimes = esim.getPETimes()
-# simulate
-esim.simulateAll(peTimes)
+if __name__ == "__main__":
+	# init class
+	esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt", debugPlots=True)
+	# get PE times
+	peTimes = esim.getPETimes()
+	# simulate
+	esim.simulateAll(peTimes)
 
-plt.show()
+	plt.show()
 
 
 
