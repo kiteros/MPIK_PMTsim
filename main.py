@@ -9,6 +9,9 @@ class ElectronicsSimulation:
 	"""
 	Class to simulate PMT and ADC response to photo electron events.
 
+	Use `simulateAll()` to simulate full electronics chain or methods for
+	individual simulations if intermiediate results are required.
+
 	Attributes
 	----------
 	f_sample : float
@@ -124,31 +127,102 @@ class ElectronicsSimulation:
 			plt.xlabel("A/au")
 			plt.ylabel("Probability")
 	
-	# simulates PE times
-	# npe - number of photo electrons
-	# returns time points array ns
+
 	def simulatePETimes(self, npe = 10, t_mu = 0, t_sig = 300):
+		"""
+		Simulates gaussian photo electron arrival times.
+
+		Parameters
+		----------
+		npe - int
+			number of photo electrons
+		t_mu - float
+			mean time in ns
+		t_sig - float
+			standard deviation in ns
+		
+		Returns
+		-------
+		ndarray
+			list of times in ns
+		"""
 		return norm.rvs(t_mu,t_sig,npe)
 	
-	# simulates time spectrum of photo electrons (normal distributed)
+
 	def simulateTimeSpectrum(self, t_mu = 1, t_sig = 1):
+		"""
+		Simulates a gaussian time spectrum.
+
+		Parameters
+		----------
+		t_mu - float
+			mean time in ns
+		t_sig - float
+			standard deviation in ns
+		
+		Returns
+		-------
+		tuple of ndarray
+			times in ns and their probabilities
+		"""
 		tsx = np.arange(int((t_mu+3*t_sig)/self.t_step))*self.t_step
 		return tsx, norm.pdf(tsx,t_mu,t_sig)
 	
-	# simulates amplitude spectrum of photo electrons (normal distributed)
+	
 	def simulateAmplitudeSpectrum(self, a_mu = 1, a_sig = 1):
+		"""
+		Simulates a gaussian amplitude spectrum.
+
+		Parameters
+		----------
+		a_mu - float
+			mean amplitude (set to 1 for nomalized output)
+		a_sig - float
+			standard deviation
+		
+		Returns
+		-------
+		tuple of ndarray
+			amplitudes and their probabilities
+		"""
 		asx = np.arange(int((a_mu+3*a_sig)/0.01))*0.01
 		return asx, norm.pdf(asx,a_mu,a_sig)
 		
-	# simulates pulse shape (normal distributed)
+	
 	def simulatePulseShape(self, t_mu = 0, t_sig = 3):
+		"""
+		Simulates a gaussian pulse shape.
+
+		Parameters
+		----------
+		t_mu - float
+			peak time in ns
+		t_sig - float
+			pulse width in ns
+		
+		Returns
+		-------
+		tuple of ndarray
+			times in ns and amplitudes in normalized units
+		"""
 		psx = np.arange(int((6*t_sig)/self.t_step))*self.t_step-3*t_sig
 		return psx, norm.pdf(psx,t_mu,t_sig)
 	
-	# simulates PMT response to PEs
-	# returns times array ns
-	#	signal array au
+	
 	def simulatePMTSignal(self, peTimes):
+		"""
+		Simulates PMT signal based on photo electron times.
+
+		Parameters
+		----------
+		peTimes - array_like
+			list of photo electron arrival times in ns
+		
+		Returns
+		-------
+		tuple of ndarray
+			times in ns and simulated signal
+		"""
 		# make discrete times
 		t_min = peTimes.min()-self.t_pad
 		t_max = peTimes.max()+self.t_pad
@@ -160,15 +234,40 @@ class ElectronicsSimulation:
 			signal[int((t-t_min)/self.t_step)] += self.ampDist.rvs() #TODO correct?
 		return times, signal
 	
-	# simulates the elctronics
-	# returns signal array au
+
 	def simulateElectronics(self, signal):
+		"""
+		Simulates effect of electronics on PMT signal.
+
+		Parameters
+		----------
+		signal - array_like
+			signal from PMT (use result of `simulatePMTSignal()`)
+		
+		Returns
+		-------
+		ndarray
+			simulated signal
+		"""
 		return np.convolve(signal, self.pulseShape[1], 'same')
 	
-	# simulate ADC
-	# returns times array ns
-	#	samples array LSB
+	
 	def simulateADC(self, times, signal):
+		"""
+		Simulates ADC out based on electronics signal.
+
+		Parameters
+		----------
+		times - array_like
+			times of signal in ns
+		signal - array_like
+			amplitudes of signal in normalized units (use result of `simulateElectronics`)
+		
+		Returns
+		-------
+		tuple of ndarray
+			times in ns and simulated output in LSB
+		"""
 		jitter = self.jitter
 		if jitter == None:
 			jitter = randint.rvs(0,self.oversamp) #TODO random size?
@@ -178,6 +277,19 @@ class ElectronicsSimulation:
 		return stimes, samples
 	
 	def simulateAll(self, peTimes):
+		"""
+		Simulates ADC output based on photo electron times.
+
+		Parameters
+		----------
+		peTimes - array_like
+			list of photo electron arrival times in ns
+		
+		Returns
+		-------
+		tuple of ndarray
+			times in ns and simulated ADC output in LSB
+		"""
 		# simulate pmt
 		times, signal = esim.simulatePMTSignal(peTimes)
 		# convolve with pulse shape
@@ -197,6 +309,8 @@ class ElectronicsSimulation:
 			plt.title("ADC output")
 			plt.xlabel("t/ns")
 			plt.ylabel("A/LSB")
+		# return
+		return stimes, samples
 	
 	def getPETimes(self, source = None):	
 		#TODO remove
