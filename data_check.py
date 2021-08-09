@@ -10,11 +10,13 @@ if makePlots:
     plt.scatter(east, north, c="grey")
 
 # shower events
-events = uproot.lazy("data/*.root:XCDF")
+path = "data/gammabbww/" # 5, 46 broken?
+events = uproot.lazy(path+"*.root:XCDF")
 binsAll = np.linspace(-5,170)
 histAll = np.zeros(binsAll.shape[0]-1)
-upperAll = np.zeros(pmtIdG.shape)
-lowerAll = np.zeros(pmtIdG.shape)
+xedges = np.linspace(10**0,10**4,1001)
+yedges = np.linspace(10**0,10**4,1001)
+histULAll = np.zeros((xedges.shape[0]-1,yedges.shape[0]-1))
 particles = np.zeros(70)
 parTicks = ([2,3,5,6,8,9,11,12,14,15],["$e^+$","$e^-$","$\mu^+$","$\mu^-$","$\pi^+$","$\pi^-$","$K^+$","$K^-$","$p$","$\\bar p$"])
 cdx = 0
@@ -50,6 +52,7 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
     lower[sel] = cntP[pmtIdP%2==1]
     upper[exclusion] = 0
     lower[exclusion] = 0
+    histUL, xedges, yedges = np.histogram2d(upper,lower, bins=[xedges,yedges])
     if makePlots:
         plt.figure(13)
         plt.scatter(upper,lower)
@@ -65,8 +68,7 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
         plt.xticks(*parTicks)
     # carry over
     histAll += hist
-    upperAll += upper
-    lowerAll += lower
+    histULAll += histUL
     cdx += 1
     #if cdx > 5: break
     #break
@@ -78,13 +80,13 @@ plt.plot(binsAll[:-1], histAll)
 plt.yscale("log")
 # fig 13 (upper/lower ratio)
 plt.figure(13)
-hist, xedges, yedges = np.histogram2d(upperAll,lowerAll, 100)
-plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(hist+1))
+plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(histULAll))
 plt.colorbar()
 plt.xscale("log")
 plt.yscale("log")
-#np.save("data/is_upper.npy",upperAll)
-#np.save("data/is_lower.npy",lowerAll)
+np.save(path+"histUL.npy",histULAll)
+np.save(path+"xedges.npy",xedges)
+np.save(path+"yedges.npy",yedges)
 # particles
 plt.figure(3)
 plt.bar(np.arange(16), particles[:16]) # ignore resonaces and neutrinos
