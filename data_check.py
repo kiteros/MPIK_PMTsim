@@ -23,7 +23,7 @@ if makePlots:
     plt.scatter(east, north, c="grey")
 
 # shower events
-path = "data/protonbbww/" # gamma 5, 46 broken?
+path = "data/gammabbww/" # gamma 5, 46 broken?
 events = uproot.lazy(path+"*.root:XCDF")
 binsAll = np.linspace(-5,170)
 histAll = np.zeros(binsAll.shape[0]-1)
