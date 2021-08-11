@@ -36,14 +36,44 @@ for path in paths:
     histEOnly, xedges, yedges = np.histogram2d(upper[eOnly],lower[eOnly], bins=[xedges,yedges])
     histMuOnly, xedges, yedges = np.histogram2d(upper[muOnly],lower[muOnly], bins=[xedges,yedges])
     histMuAny, xedges, yedges = np.histogram2d(upper[muAny],lower[muAny], bins=[xedges,yedges])
+    # scale hists
+    histEOnly /= np.sum(histEOnly)
+    histMuAny /= np.sum(histMuAny)
+    # likelihood ratio
+    histLR = histMuAny/histEOnly
     # plot
-    for title, hist in zip(["Only electrons", "Only muons", "Any muons"], [histEOnly, histMuOnly, histMuAny]):
+    for title, hist in zip(["Only electrons", "Only muons", "Any muons", "Likelihood ratio"],
+            [histEOnly, histMuOnly, histMuAny, histLR]):
         plt.figure()
         plt.title(title)
         plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(hist))
         plt.colorbar()
         plt.xscale("log")
         plt.yscale("log")
+        plt.xlabel("upper cell PEs")
+        plt.ylabel("lower cell PEs")
+    # ROC curve
+    uppIdx = np.digitize(upper, xedges)
+    lowIdx = np.digitize(lower, yedges)
+    uppIdx[uppIdx >= xedges.shape[0]] = xedges.shape[0]-2
+    lowIdx[lowIdx >= yedges.shape[0]] = yedges.shape[0]-2
+    muLR = histLR[uppIdx, lowIdx]
+    cuts = np.linspace(0, 1)
+    falseMu = np.zeros(cuts.shape)
+    trueMu = np.zeros(cuts.shape)
+    for i in np.arange(cuts.shape[0]):
+        tagging = muLR > cuts[i]
+        trueMu[i] = np.logical_and(tagging,muAny).sum()/muAny.sum()
+        falseMu[i] = np.logical_and(tagging,~muAny).sum()/(~muAny).sum()
+    # plot
+    plt.figure()
+    plt.title("ROC curve")
+    plt.plot(falseMu,trueMu)
+    plt.scatter(falseMu,trueMu,c=cuts)
+    plt.colorbar()
+    plt.xlabel("false muons")
+    plt.ylabel("true muons")
+
 
 
 
