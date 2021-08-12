@@ -28,15 +28,15 @@ def makeHistograms(xedges, yedges, taggedPmtEvts):
     histLR = histMuAny/histEOnly
     return xedges,yedges,upper,lower,muAny,histEOnly,histMuAny,histLR
 
-def plotLogHist2d(xedges, yedges, title, hist):
+def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", ylabel="lower cell PEs"):
     plt.figure()
     plt.title(title)
     plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(hist))
     plt.colorbar()
     plt.xscale("log")
     plt.yscale("log")
-    plt.xlabel("upper cell PEs")
-    plt.ylabel("lower cell PEs")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
 
 def muonScoreLR(xedges, yedges, upper, lower, histLR):
     uppIdx = np.digitize(upper, xedges)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         histULAll = np.load(path+"histUL.npy")
 
         # fig 13 (upper/lower ratio)
-        plotLogHist2d(xedges, yedges, path, histULAll)
+        plotLogHist2d(xedges, yedges, histULAll, path)
 
         # make individual histograms
         taggedPmtEvts = np.load(path+"taggedPmtEvts.npy")
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         # plot
         for title, hist in zip(["Only electrons", "Any muons", "Likelihood ratio"],
                 [histEOnly, histMuAny, histLR]):
-            plotLogHist2d(xedges, yedges, title, hist)
+            plotLogHist2d(xedges, yedges, hist, title)
         # ROC curve
         muLR = muonScoreLR(xedges, yedges, upper, lower, histLR)
         cuts = np.linspace(0, 1)
