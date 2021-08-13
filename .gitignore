@@ -1,4 +1,4 @@
-.vscode/launch.json
+.vscode/
+__pycache__/
 *.root
 *.npy
-__pycache__/
