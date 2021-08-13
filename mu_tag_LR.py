@@ -92,7 +92,7 @@ if __name__ == "__main__":
     showerIdsP = np.unique(taggedPmtEvts[0]).astype(int)
 
     # calculate likelihood ratio
-    xedges, yedges, upper, lower, *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
+    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
 
     # select what to do
     edst = True
