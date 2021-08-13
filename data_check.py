@@ -1,19 +1,7 @@
 import uproot
 import numpy as np
 from matplotlib import pyplot as plt
-
-TAG_E = 1
-TAG_MU = 2
-TAG_MESON = 4
-TAG_OTHER = 8
-def makeTag(parts):
-    tag = 0
-    for p in parts:
-        if p < 4: tag |= TAG_E
-        elif p >= 5 and p < 7: tag |= TAG_MU
-        elif p >= 7 and p < 13: tag |= TAG_MESON
-        else: tag |= TAG_OTHER
-    return tag
+from quick_hist import makeTag
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
