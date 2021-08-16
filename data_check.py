@@ -1,7 +1,7 @@
 import uproot
 import numpy as np
 from matplotlib import pyplot as plt
-from quick_hist import makeTag
+from shower_analysis import makeTag
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)

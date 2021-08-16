@@ -1,57 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-
-TAG_E = 1
-TAG_MU = 2
-TAG_MESON = 4
-TAG_OTHER = 8
-def makeTag(parts):
-    tag = 0
-    for p in parts:
-        if p < 4: tag |= TAG_E
-        elif p >= 5 and p < 7: tag |= TAG_MU
-        elif p >= 7 and p < 13: tag |= TAG_MESON
-        else: tag |= TAG_OTHER
-    return tag
-
-def makeHistograms(xedges, yedges, taggedPmtEvts):
-    # extract relevant data
-    upper = taggedPmtEvts[2]
-    lower = taggedPmtEvts[3]
-    tags = taggedPmtEvts[4].astype(int)
-    tags |= taggedPmtEvts[5].astype(int)
-    # select type
-    eOnly = tags ^ TAG_E == 0
-    #muOnly = tags ^ TAG_MU == 0
-    muAny = tags & TAG_MU > 0
-    # histogram
-    histEOnly, xedges, yedges = np.histogram2d(upper[eOnly],lower[eOnly], bins=[xedges,yedges])
-    #histMuOnly, xedges, yedges = np.histogram2d(upper[muOnly],lower[muOnly], bins=[xedges,yedges])
-    histMuAny, xedges, yedges = np.histogram2d(upper[muAny],lower[muAny], bins=[xedges,yedges])
-    # scale hists
-    histEOnly /= np.sum(histEOnly)
-    histMuAny /= np.sum(histMuAny)
-    # likelihood ratio
-    histLR = histMuAny/histEOnly
-    return xedges,yedges,upper,lower,muAny,histEOnly,histMuAny,histLR
-
-def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", ylabel="lower cell PEs"):
-    plt.figure()
-    plt.title(title)
-    plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(hist))
-    plt.colorbar()
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-
-def muonScoreLR(xedges, yedges, upper, lower, histLR):
-    uppIdx = np.digitize(upper, xedges)
-    lowIdx = np.digitize(lower, yedges)
-    uppIdx[uppIdx >= xedges.shape[0]] = xedges.shape[0]-2
-    lowIdx[lowIdx >= yedges.shape[0]] = yedges.shape[0]-2
-    muLR = histLR[uppIdx, lowIdx]
-    return muLR
+from shower_analysis import *
 
 # --- start ---
 if __name__ == "__main__":
@@ -62,14 +11,14 @@ if __name__ == "__main__":
         yedges = np.load(path+"yedges.npy")
         histULAll = np.load(path+"histUL.npy")
 
-        plotHists = False
+        plotHists = True
 
         # fig 13 (upper/lower ratio)
         if plotHists: plotLogHist2d(xedges, yedges, histULAll, path)
 
         # make individual histograms
         taggedPmtEvts = np.load(path+"taggedPmtEvts.npy")
-        xedges, yedges, upper, lower, muAny, histEOnly, histMuAny, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
+        upper, lower, muAny, histEOnly, histMuAny, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
         # plot
         for title, hist in zip(["Only electrons", "Any muons", "Likelihood ratio"],
                 [histEOnly, histMuAny, histLR]):
