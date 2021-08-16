@@ -13,8 +13,9 @@ if __name__ == "__main__":
     yedges = np.load(protons+"yedges.npy")
 
     # load events
-    taggedPmtEvts = np.load(protons+"taggedPmtEvts.npy")
-    showerIdsP = np.unique(taggedPmtEvts[0]).astype(int)
+    taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
+    taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
+    showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
 
     # calculate likelihood ratio
     *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
@@ -37,7 +38,8 @@ if __name__ == "__main__":
     cntsP, tCntsP = tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=cuts, truth=True)
 
     # repeat for gammas
-    taggedPmtEvts = np.load(gammas+"taggedPmtEvts.npy")
+    taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
+    taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
     cntsG, tCntsG = tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=cuts, truth=True)
 
     # plot

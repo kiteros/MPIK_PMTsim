@@ -17,7 +17,8 @@ if __name__ == "__main__":
         if plotHists: plotLogHist2d(xedges, yedges, histULAll, path)
 
         # make individual histograms
-        taggedPmtEvts = np.load(path+"taggedPmtEvts.npy")
+        taggedPmtEvts = np.load(path+"taggedPmtEvts2.npy")
+        taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
         upper, lower, muAny, histEOnly, histMuAny, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
         # plot
         for title, hist in zip(["Only electrons", "Any muons", "Likelihood ratio"],

@@ -51,10 +51,10 @@ def makeHistograms(xedges, yedges, taggedPmtEvts):
         histLR - likelihood ratio of a muon event
     """
     # extract relevant data
-    upper = taggedPmtEvts[2]
-    lower = taggedPmtEvts[3]
-    tags = taggedPmtEvts[4].astype(int)
-    tags |= taggedPmtEvts[5].astype(int)
+    upper = taggedPmtEvts["upper"]
+    lower = taggedPmtEvts["lower"]
+    tags = taggedPmtEvts["tagsUpper"]
+    tags |= taggedPmtEvts["tagsLower"]
     # select type
     eOnly = tags ^ TAG_E == 0
     #muOnly = tags ^ TAG_MU == 0
@@ -151,12 +151,12 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False):
         an array of muon counts for each shower or multiple arrays if cut is an array;
         if truth is True the true muon count for each shower is returned as second array
 	"""
-    upper = taggedPmtEvts[2]
-    lower = taggedPmtEvts[3]
+    upper = taggedPmtEvts["upper"]
+    lower = taggedPmtEvts["lower"]
     # calculate muon score
     score = muonScoreLR(xedges, yedges, upper, lower, histLR)
     # get shower indices
-    cdx = taggedPmtEvts[0]
+    cdx = taggedPmtEvts["showerID"]
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
     idx = np.empty(indices.shape, dtype=int)
     idx[:-1] = indices[1:]-1
@@ -176,8 +176,8 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False):
     #TODO handle inf/nan in sums
     if not truth: return cnts
     # sum true muons
-    tags = taggedPmtEvts[4].astype(int)
-    tags |= taggedPmtEvts[5].astype(int)
+    tags = taggedPmtEvts["tagsUpper"].astype(int)
+    tags |= taggedPmtEvts["tagsLower"].astype(int)
     muAny = tags & TAG_MU > 0
     cumsums = np.cumsum(muAny)[idx]
     tCnts = np.empty(cumsums.shape)
