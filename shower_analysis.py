@@ -27,7 +27,7 @@ def makeTag(parts):
         else: tag |= TAG_OTHER
     return tag
 
-def makeHistograms(xedges, yedges, taggedPmtEvts):
+def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     """
     Makes histograms from tagged PMT events.
 
@@ -39,20 +39,24 @@ def makeHistograms(xedges, yedges, taggedPmtEvts):
         histogram yedges
     taggedPmtEvnts - array_like
         list of PMT events with tags (see TODO)
+    upper - string or array_like
+        upper events, default is `"upper"`
+    lower - string or array_like
+        lower events, default is `"lower"`
     
     Returns
     -------
     tuple of ndarray
-        upper - PEs in upper chamber
-        lower - PEs in lower chamber
+        upper - events in upper chamber
+        lower - events in lower chamber
         muAny - if an muon is in the chamber
         histEOnly - histogram for electron only events
         histMuAny - histogram for muon events
         histLR - likelihood ratio of a muon event
     """
     # extract relevant data
-    upper = taggedPmtEvts["upper"]
-    lower = taggedPmtEvts["lower"]
+    if isinstance(upper,str): upper = taggedPmtEvts[upper]
+    if isinstance(lower,str): lower = taggedPmtEvts[lower]
     tags = taggedPmtEvts["tagsUpper"]
     tags |= taggedPmtEvts["tagsLower"]
     # select type
@@ -117,8 +121,8 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     """
     uppIdx = np.digitize(upper, xedges)
     lowIdx = np.digitize(lower, yedges)
-    uppIdx[uppIdx >= xedges.shape[0]] = xedges.shape[0]-2
-    lowIdx[lowIdx >= yedges.shape[0]] = yedges.shape[0]-2
+    uppIdx[uppIdx >= xedges.shape[0]-1] = xedges.shape[0]-2
+    lowIdx[lowIdx >= yedges.shape[0]-1] = yedges.shape[0]-2
     muLR = histLR[uppIdx, lowIdx]
     return muLR
 
@@ -263,3 +267,20 @@ def profilePoints(xs, ys):
         y[i] = np.mean(ys[sel])
         yerr[i] = np.std(ys[sel])
     return x,y,yerr,xerr
+
+def plotROC(muAny, muLR, cuts):
+    falseMu = np.zeros(cuts.shape)
+    trueMu = np.zeros(cuts.shape)
+    for i in np.arange(cuts.shape[0]):
+        tagging = muLR > cuts[i]
+        trueMu[i] = np.logical_and(tagging,muAny).sum()/muAny.sum()
+        falseMu[i] = np.logical_and(tagging,~muAny).sum()/(~muAny).sum()
+        # plot
+    plt.figure()
+    plt.title("ROC curve")
+    plt.plot(falseMu,trueMu)
+    plt.scatter(falseMu,trueMu,c=cuts)
+    plt.colorbar()
+    plt.xlabel("false muons")
+    plt.ylabel("true muons")
+

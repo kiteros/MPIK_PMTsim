@@ -27,20 +27,7 @@ if __name__ == "__main__":
         # ROC curve
         muLR = muonScoreLR(xedges, yedges, upper, lower, histLR)
         cuts = np.linspace(0, 1)
-        falseMu = np.zeros(cuts.shape)
-        trueMu = np.zeros(cuts.shape)
-        for i in np.arange(cuts.shape[0]):
-            tagging = muLR > cuts[i]
-            trueMu[i] = np.logical_and(tagging,muAny).sum()/muAny.sum()
-            falseMu[i] = np.logical_and(tagging,~muAny).sum()/(~muAny).sum()
-        # plot
-        plt.figure()
-        plt.title("ROC curve")
-        plt.plot(falseMu,trueMu)
-        plt.scatter(falseMu,trueMu,c=cuts)
-        plt.colorbar()
-        plt.xlabel("false muons")
-        plt.ylabel("true muons")
+        plotROC(muAny, muLR, cuts)
 
         # fig 14
         tagging = muLR > 10
