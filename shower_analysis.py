@@ -127,7 +127,7 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     return muLR
 
 
-def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False):
+def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False, upper="upper", lower="lower"):
     """
 	Counts muons in showers based on their `muonScore()`.
 
@@ -147,6 +147,10 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False):
         can be an array of multiple cuts, default is 1
     truth - bool
         if True, returns true number of muon events, default is False
+    upper - string or array_like
+        upper events, default is `"upper"`
+    lower - string or array_like
+        lower events, default is `"lower"`
 
 	Returns
 	-------
@@ -155,8 +159,8 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False):
         an array of muon counts for each shower or multiple arrays if cut is an array;
         if truth is True the true muon count for each shower is returned as second array
 	"""
-    upper = taggedPmtEvts["upper"]
-    lower = taggedPmtEvts["lower"]
+    if isinstance(upper,str): upper = taggedPmtEvts[upper]
+    if isinstance(lower,str): lower = taggedPmtEvts[lower]
     # calculate muon score
     score = muonScoreLR(xedges, yedges, upper, lower, histLR)
     # get shower indices
