@@ -1,11 +1,14 @@
+from muon_tagging import MuTagML
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from shower_analysis import getEMuTags, plotROC
+from shower_analysis import getEMuTags, plotROC, tagShowersMT
 from numpy.lib import recfunctions as rfn
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve
+from keras.callbacks import EarlyStopping
+from mu_tag_LR import energyDependentAnalysis
 
 # setup net
 trainModel = False
@@ -39,7 +42,7 @@ y_test = muAny[test]*1
 
 # train model
 if trainModel:
-    history = model.fit(x_train, y_train, batch_size=64, epochs=2, validation_split=0.2)
+    history = model.fit(x_train, y_train, batch_size=64, epochs=20, validation_split=0.2, callbacks=[EarlyStopping(patience=3,restore_best_weights=True)])
     model.save("models/mu_tag_ML")
 
 # test model
@@ -57,5 +60,41 @@ plt.title("ROC curve")
 plt.plot(fpr,tpr)
 plt.xlabel("false muons")
 plt.ylabel("true muons")
+plt.scatter(fpr[::100],tpr[::100],c=cuts[::100])
+plt.colorbar()
 
+# energy dependent analysis
+mt = MuTagML(model)
+gammas = "data/gammabbww/"
+protons = "data/protonbbww/"
+
+# settings
+edst = False
+if edst:
+    plotEdst = True
+    cuts = np.array([-1,0,1])
+    sep = np.linspace(0,200,200)
+    eBinCnt = 4
+else:
+    plotEdst = False
+    cuts = np.linspace(-6,1,50)
+    sep = np.linspace(0,500,500)
+    eBinCnt = 20
+plotHists = False
+
+# tag showers
+taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
+taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
+showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
+cntsP, tCntsP = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True)
+
+# repeat for gammas
+taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
+taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
+cntsG, tCntsG = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True)
+
+# analyse
+energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)
+
+# show plots
 plt.show()

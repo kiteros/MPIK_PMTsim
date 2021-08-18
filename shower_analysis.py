@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from numpy.core.fromnumeric import sort
 
 TAG_E = 1
 TAG_MU = 2
@@ -183,6 +184,14 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False, upper=
     if isinstance(lower,str): lower = taggedPmtEvts[lower]
     # calculate muon score
     score = muonScoreLR(xedges, yedges, upper, lower, histLR)
+    # tag showers
+    return tagShowersS(taggedPmtEvts,score,cut,truth)
+
+def tagShowersMT(muonTagger, taggedPmtEvts, cut=1, truth=False):
+    score = muonTagger.muonScore(taggedPmtEvts)
+    return tagShowersS(taggedPmtEvts,score,cut,truth)
+
+def tagShowersS(taggedPmtEvts, score, cut=1, truth=False):
     # get shower indices
     cdx = taggedPmtEvts["showerID"]
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]

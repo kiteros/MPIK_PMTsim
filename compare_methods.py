@@ -2,7 +2,8 @@ from sys import float_info
 from muon_tagging import *
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve
-from shower_analysis import getEMuTags
+from shower_analysis import *
+from mu_tag_LR import energyDependentAnalysis
 
 # load muon taggers
 mtLR = MuTagLR().load("models/mu_tag_LR_PEs")
@@ -11,8 +12,9 @@ mtML = MuTagML().load("models/mu_tag_ML")
 mtSum = SumTagger([mtRise, mtLR])
 
 # load data
-path = "data/protonbbww/"
-taggedPmtEvts = np.load(path+"taggedPmtEvts2.npy")
+gammas = "data/gammabbww/"
+protons = "data/protonbbww/"
+taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
 taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
 _, muAny = getEMuTags(taggedPmtEvts)
 
@@ -28,4 +30,5 @@ for mt, lbl in zip([mtLR, mtRise, mtML, mtSum],["charge LR", "rise time LR", "ch
     plt.plot(fpr,tpr,label=lbl)
 
 plt.legend()
+
 plt.show()
