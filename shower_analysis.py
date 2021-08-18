@@ -74,6 +74,13 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     histLR = histMuAny/histEOnly
     return upper,lower,muAny,histEOnly,histMuAny,histLR
 
+def getEMuTags(taggedPmtEvts):
+    tags = taggedPmtEvts["tagsUpper"]
+    tags |= taggedPmtEvts["tagsLower"]
+    eOnly = tags ^ TAG_E == 0
+    muAny = tags & TAG_MU > 0
+    return eOnly, muAny
+
 def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", ylabel="lower cell PEs"):
     """
     Plots logarithmic 2D histogram.
@@ -279,7 +286,7 @@ def plotROC(muAny, muLR, cuts):
         tagging = muLR > cuts[i]
         trueMu[i] = np.logical_and(tagging,muAny).sum()/muAny.sum()
         falseMu[i] = np.logical_and(tagging,~muAny).sum()/(~muAny).sum()
-        # plot
+    # plot
     plt.figure()
     plt.title("ROC curve")
     plt.plot(falseMu,trueMu)
