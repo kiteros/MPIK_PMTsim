@@ -75,6 +75,19 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     return upper,lower,muAny,histEOnly,histMuAny,histLR
 
 def getEMuTags(taggedPmtEvts):
+    """
+    Creates bool arrays for electron and muon events.
+
+    Parameters
+    ----------
+    taggedPmtEvnts - array_like
+        list of PMT events with tags (see TODO)
+    
+    Returns
+    -------
+    tuple of ndarray
+        bool arrays for electron only events and events with muons
+    """
     tags = taggedPmtEvts["tagsUpper"]
     tags |= taggedPmtEvts["tagsLower"]
     eOnly = tags ^ TAG_E == 0
@@ -279,11 +292,23 @@ def profilePoints(xs, ys):
         yerr[i] = np.std(ys[sel])
     return x,y,yerr,xerr
 
-def plotROC(muAny, muLR, cuts):
+def plotROC(muAny, muScore, cuts):
+    """
+	Plots a ROC curve for muons.
+
+	Parameters
+	----------
+	muAny - array_like
+		bool array of true muon events
+	muScore - array_like
+		score to plot ROC curve for
+    cuts - array_like
+        cuts to plot
+    """
     falseMu = np.zeros(cuts.shape)
     trueMu = np.zeros(cuts.shape)
     for i in np.arange(cuts.shape[0]):
-        tagging = muLR > cuts[i]
+        tagging = muScore > cuts[i]
         trueMu[i] = np.logical_and(tagging,muAny).sum()/muAny.sum()
         falseMu[i] = np.logical_and(tagging,~muAny).sum()/(~muAny).sum()
     # plot
