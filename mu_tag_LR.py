@@ -1,6 +1,8 @@
+from re import X
 import numpy as np
 from matplotlib import pyplot as plt
 from shower_analysis import *
+from muon_tagging import MuTagLR
 
 def energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, plotProfiles=True):
     # energy distribution
@@ -108,6 +110,7 @@ if __name__ == "__main__":
 
     energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG)
 
-
+    # make muon tagger
+    MuTagLR(xedges,yedges,histLR).save("models/mu_tag_LR_PEs")
 
     plt.show()

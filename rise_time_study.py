@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from shower_analysis import *
 from mu_tag_LR import energyDependentAnalysis
+from muon_tagging import MuTagRise
 
 def getT10_90(taggedPmtEvts):
     # get percentiles and differences
@@ -80,5 +81,8 @@ if __name__ == "__main__":
 
     # analyse
     energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)
+
+    # make muon tagger
+    MuTagRise(xedges,yedges,histLR).save("models/mu_tag_LR_rise")
 
     plt.show()
