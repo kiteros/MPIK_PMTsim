@@ -57,8 +57,17 @@ class MuTagML(MuonTagger):
         self.model.save(filename)
     
     def muonScore(self, taggedPmtEvts):
-        data = taggedPmtEvts[["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]]
-        data = rfn.structured_to_unstructured(data, dtype=float)
+        inputs = self.model.get_layer("input_1").get_config()["batch_input_shape"][1]
+        if inputs == 8:
+            data = taggedPmtEvts[["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]]
+            data = rfn.structured_to_unstructured(data, dtype=float)
+        elif inputs == 6:
+            data = taggedPmtEvts[["upper","lower","per10Upper","per10Lower","per90Upper","per90Lower"]]
+            data = rfn.structured_to_unstructured(data, dtype=float)
+            for i in np.arange(2,6):
+                data[:,i] -= taggedPmtEvts["firstUpper"]
+        else:
+            raise NotImplementedError("Only input shapes 6 and 8 supported.")
         return self.model(data).numpy().ravel()
 
 class SumTagger(MuonTagger):

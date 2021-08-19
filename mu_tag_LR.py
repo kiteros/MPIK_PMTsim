@@ -1,6 +1,7 @@
 from re import X
 import numpy as np
 from matplotlib import pyplot as plt
+from tensorflow.python.ops.gen_math_ops import cumsum
 from shower_analysis import *
 from muon_tagging import MuTagLR
 
@@ -44,6 +45,19 @@ def energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eB
     plt.xlabel("LR cut")
     plt.ylabel("Muon cut")
 
+    # plot muon estimates
+    plt.figure()
+    plt.title("Muon counts")
+    for x,y,snr,minE,maxE in snrBest:
+        sel = np.logical_and(energyP > minE, energyP < maxE)
+        plt.scatter(tCntsP[sel], cntsP[int(x)][sel]-tCntsP[sel], label="{:.1f}@{:.0f}-{:.0f}TeV".format(cuts[int(x)],minE/1000,maxE/1000),marker=".")
+        sel = np.logical_and(energyG > minE, energyG < maxE)
+        plt.scatter(tCntsG[sel], cntsG[int(x)][sel]-tCntsG[sel], label="{:.1f}@{:.0f}-{:.0f}TeV".format(cuts[int(x)],minE/1000,maxE/1000),marker="^")
+    plt.plot([0,tCntsP.max()],[0,0])
+    plt.xlabel("True muon number")
+    plt.ylabel("Estimated muons number")
+    plt.legend()
+
 # --- start ---
 if __name__ == "__main__":
     # inputs
@@ -66,7 +80,7 @@ if __name__ == "__main__":
     edst = True
     if edst:
         plotEdst = True
-        cuts = np.array([6,7.2,10.7])
+        cuts = np.array([10])#[6,7.2,10.7])
         sep = np.linspace(0,200,200)
         eBinCnt = 4
     else:
