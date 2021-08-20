@@ -46,6 +46,7 @@ def energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eB
     plt.ylabel("Muon cut")
 
     # plot muon estimates
+    '''
     plt.figure()
     plt.title("Muon counts")
     for x,y,snr,minE,maxE in snrBest:
@@ -56,7 +57,49 @@ def energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eB
     plt.plot([0,tCntsP.max()],[0,0])
     plt.xlabel("True muon number")
     plt.ylabel("Estimated muons number")
+    plt.legend()#'''
+
+def plotRatioEMu(taggedPmtEvtsP, taggedPmtEvtsG, energyP, energyG):
+    eOnlyP, muAnyP = getEMuTags(taggedPmtEvtsP)
+    cdx = taggedPmtEvtsP["showerID"]
+    eCntP = magicCumsum(cdx,eOnlyP)
+    muCntP = magicCumsum(cdx,muAnyP)
+    eOnlyG, muAnyG = getEMuTags(taggedPmtEvtsG)
+    cdx = taggedPmtEvtsG["showerID"]
+    eCntG = magicCumsum(cdx,eOnlyG)
+    muCntG = magicCumsum(cdx,muAnyG)
+    plt.figure(1)
+    plt.title("Electron muon ratio")
+    plt.scatter(muCntP,eCntP,label="Protons",marker=".")
+    plt.scatter(muCntG,eCntG,label="Gammas",marker="^")
+    plt.xlabel("Muon events")
+    plt.ylabel("Electron only events")
     plt.legend()
+    # plot muon electron ratio
+    plt.figure(2)
+    plt.title("Electron muon ratio")
+    plt.scatter(energyP/1000,muCntP/eCntP,label="Protons",marker=".")
+    plt.scatter(energyG/1000,muCntG/eCntG,label="Gammas",marker="^")
+    plt.xlabel("Energy/TeV")
+    plt.ylabel("$N_\mu/N_e$")
+    plt.legend()
+    return eCntP,muCntP,eCntG,muCntG
+
+def loadData(protons, gammas, exclusion):
+    taggedPmtEvtsP = np.load(protons+"taggedPmtEvts2.npy")
+    taggedPmtEvtsP = taggedPmtEvtsP[taggedPmtEvtsP["distance"] > exclusion*100]
+    showerIdsP = np.unique(taggedPmtEvtsP["showerID"]).astype(int)
+    taggedPmtEvtsG = np.load(gammas+"taggedPmtEvts2.npy")
+    taggedPmtEvtsG = taggedPmtEvtsG[taggedPmtEvtsG["distance"] > exclusion*100]
+    showerIdsG = np.unique(taggedPmtEvtsG["showerID"]).astype(int)
+
+    taggedPmtEvtsFull = np.concatenate((taggedPmtEvtsG, taggedPmtEvtsP))
+
+    # load energies
+    energyP = np.load(protons+"energy.npy")
+    energyG = np.load(gammas+"energy.npy")
+    energyP = energyP[showerIdsP]
+    return taggedPmtEvtsP,showerIdsP,taggedPmtEvtsG,taggedPmtEvtsFull,energyP,energyG
 
 # --- start ---
 if __name__ == "__main__":
@@ -69,34 +112,52 @@ if __name__ == "__main__":
     yedges = np.load(protons+"yedges.npy")
 
     # load events
-    taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
-    taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-    showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
+    exclusion = 0
+    taggedPmtEvtsP, showerIdsP, taggedPmtEvtsG, taggedPmtEvtsFull, energyP, energyG = loadData(protons, gammas, exclusion)
 
     # calculate likelihood ratio
-    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
+    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvtsFull)
+
+    # plot muon vs electron count
+    eCntP, muCntP, eCntG, muCntG = plotRatioEMu(taggedPmtEvtsP, taggedPmtEvtsG, energyP, energyG)
 
     # select what to do
     edst = True
     if edst:
         plotEdst = True
         cuts = np.array([10])#[6,7.2,10.7])
-        sep = np.linspace(0,200,200)
+        sep = np.logspace(-10,0,200) #np.linspace(0,200,200)
         eBinCnt = 4
     else:
         plotEdst = False
-        cuts = np.linspace(5,40,50)
-        sep = np.linspace(0,200,200)
+        cuts = np.linspace(0,40,50)
+        sep = np.logspace(-10,0,200) #np.linspace(0,200,200)
         eBinCnt = 20
 
 
     # tag events
-    cntsP, tCntsP = tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=cuts, truth=True)
+    cntsP, tCntsP = tagShowers(xedges, yedges, taggedPmtEvtsP, histLR, cut=cuts, truth=True, ratio=True)
 
     # repeat for gammas
-    taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
-    taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-    cntsG, tCntsG = tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=cuts, truth=True)
+    cntsG, tCntsG = tagShowers(xedges, yedges, taggedPmtEvtsG, histLR, cut=cuts, truth=True, ratio=True)
+
+    # plot counts/ratios again
+    '''
+    plt.figure(1)
+    eCntsP = eCntP+muCntP-cntsP[0]
+    plt.scatter(cntsP[0],eCntsP,label="Protons (estimated)",marker=".")
+    eCntsG = eCntG+muCntG-cntsG[0]
+    plt.scatter(cntsG[0],eCntsG,label="Gammas (estimated)",marker="^")
+    plt.legend()#'''
+    plt.figure(2)
+    plt.scatter(energyP/1000,cntsP[0],label="Protons (estimated)",marker=".")
+    plt.scatter(energyG/1000,cntsG[0],label="Gammas (estimated)",marker="^")
+    plt.legend()
+    plt.figure()
+    plt.title("Correlation")
+    plt.scatter(muCntP/eCntP,cntsP[0],label="Protons",marker=".")
+    plt.scatter(muCntG/eCntG,cntsG[0],label="Gammas",marker="^")
+    plt.legend()
 
     # plot
     '''

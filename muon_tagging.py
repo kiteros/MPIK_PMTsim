@@ -6,7 +6,6 @@ from numpy.lib import recfunctions as rfn
 
 class MuonTagger:
     
-    @classmethod
     def load(self,filename):
         pass
 

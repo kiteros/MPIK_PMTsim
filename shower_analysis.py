@@ -1,6 +1,5 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from numpy.core.fromnumeric import sort
 
 TAG_E = 1
 TAG_MU = 2
@@ -62,11 +61,9 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     tags |= taggedPmtEvts["tagsLower"]
     # select type
     eOnly = tags ^ TAG_E == 0
-    #muOnly = tags ^ TAG_MU == 0
     muAny = tags & TAG_MU > 0
     # histogram
     histEOnly, *_ = np.histogram2d(upper[eOnly],lower[eOnly], bins=[xedges,yedges])
-    #histMuOnly, xedges, yedges = np.histogram2d(upper[muOnly],lower[muOnly], bins=[xedges,yedges])
     histMuAny, *_ = np.histogram2d(upper[muAny],lower[muAny], bins=[xedges,yedges])
     # scale hists
     histEOnly /= np.sum(histEOnly)
@@ -148,7 +145,7 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     return muLR
 
 
-def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False, upper="upper", lower="lower"):
+def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, upper="upper", lower="lower", **kwargs):
     """
 	Counts muons in showers based on their `muonScore()`.
 
@@ -185,13 +182,13 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, truth=False, upper=
     # calculate muon score
     score = muonScoreLR(xedges, yedges, upper, lower, histLR)
     # tag showers
-    return tagShowersS(taggedPmtEvts,score,cut,truth)
+    return tagShowersS(taggedPmtEvts,score,cut,**kwargs)
 
-def tagShowersMT(muonTagger, taggedPmtEvts, cut=1, truth=False):
+def tagShowersMT(muonTagger, taggedPmtEvts, cut=1, **kwargs):
     score = muonTagger.muonScore(taggedPmtEvts)
-    return tagShowersS(taggedPmtEvts,score,cut,truth)
+    return tagShowersS(taggedPmtEvts,score,cut,**kwargs)
 
-def tagShowersS(taggedPmtEvts, score, cut=1, truth=False):
+def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
     # get shower indices
     cdx = taggedPmtEvts["showerID"]
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
@@ -208,19 +205,53 @@ def tagShowersS(taggedPmtEvts, score, cut=1, truth=False):
         cumsums = np.cumsum(score > cuts[i])[idx]
         cnts[i,1:] = cumsums[1:] - cumsums[0:-1]
         cnts[i,0] = cumsums[0]
+        if ratio:
+            cumsums = np.cumsum(score <= cuts[i])[idx]
+            cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
+            cnts[i,0] /= cumsums[0]
+
     if not isinstance(cut, np.ndarray):
         cnts = cnts[0]
     #TODO handle inf/nan in sums
     if not truth: return cnts
     # sum true muons
-    tags = taggedPmtEvts["tagsUpper"].astype(int)
-    tags |= taggedPmtEvts["tagsLower"].astype(int)
-    muAny = tags & TAG_MU > 0
+    eOnly, muAny = getEMuTags(taggedPmtEvts)
     cumsums = np.cumsum(muAny)[idx]
     tCnts = np.empty(cumsums.shape)
     tCnts[1:] = cumsums[1:] - cumsums[0:-1]
     tCnts[0] = cumsums[0]
+    if ratio:
+        cumsums = np.cumsum(eOnly)[idx]
+        cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
+        cnts[i,0] /= cumsums[0]
     return cnts, tCnts
+
+def magicCumsum(cdx,values):
+    """
+    Sums over values with same cdx.
+    `cnts = [np.sum(values[cdx == id]) for id in np.unique(cdx)]`
+
+    Parameters
+    ----------
+    cdx - array_like
+        sorted array of repeating event ids
+    values - array_like
+        values to sum up
+    
+    Returns
+    -------
+    ndarray
+        sum of values with same cdx
+    """
+    indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
+    idx = np.empty(indices.shape, dtype=int)
+    idx[:-1] = indices[1:]-1
+    idx[-1] = cdx.size-1
+    cumsums = np.cumsum(values)[idx]
+    cnts = np.empty(cumsums.shape)
+    cnts[1:] = cumsums[1:] - cumsums[0:-1]
+    cnts[0] = cumsums[0]
+    return cnts
 
 
 def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
@@ -230,9 +261,8 @@ def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
     tagged protons over the tagged gammas for multiple separation cuts.
     Calculates the signal to background ratio for every cut.
 
-	Parameters
-	----------
-
+    Parameters
+    ----------
 	labels - array_like
         labels for the created plots
     cntsP - list of array_like
@@ -244,8 +274,8 @@ def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
     plot - bool
         if the results should be plotted, default is `True`
 
-	Returns
-	-------
+    Returns
+    -------
 	ndarray
 		signal to background ratio for every sample (first index) and every
         separation cut (second index), `shape=(labels.size, sep.size)`

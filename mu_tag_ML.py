@@ -92,20 +92,20 @@ if edst:
 else:
     plotEdst = False
     cuts = np.linspace(0,1,50)
-    sep = np.linspace(0,500,500)
-    eBinCnt = 20
+    sep = np.logspace(-10,0,200) #np.linspace(0,500,500)
+    eBinCnt = 4
 plotHists = False
 
 # tag showers
 taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
 taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
 showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
-cntsP, tCntsP = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True)
+cntsP, tCntsP = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
 
 # repeat for gammas
 taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
 taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-cntsG, tCntsG = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True)
+cntsG, tCntsG = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
 
 # analyse
 energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)

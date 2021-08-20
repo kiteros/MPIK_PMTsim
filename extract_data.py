@@ -9,9 +9,12 @@ pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
 taggedPmtEvts = []
 tpedt = [("showerID","i4"),("pmtIdG","i4"),("upper","i4"),("lower","i4"),("tagsUpper","int8"),("tagsLower","int8"),("distance","f4"),
     ("firstUpper","f4"),("firstLower","f4"),("per10Upper","f4"),("per10Lower","f4"),("per90Upper","f4"),("per90Lower","f4")]
-path = "data/gammabbww/"
+primaries = []
+pridt = [("showerID","i4"),("showerType","i4"),("showerEnergy","f4")]
+path = "data/protonbbww/"
 for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
-        filter_name=["HAWCSim.Evt.Num","HAWCSim.PE.Time","HAWCSim.Evt.firstTime","HAWCSim.PE.PMTID","HAWCSim.Evt.X","HAWCSim.Evt.Y","HAWCSim.PE.parPType"]):
+        filter_name=["HAWCSim.Evt.Num","HAWCSim.PE.Time","HAWCSim.Evt.firstTime","HAWCSim.PE.PMTID","HAWCSim.Evt.X","HAWCSim.Evt.Y","HAWCSim.PE.parPType"
+        ,"HAWCSim.Evt.pType","HAWCSim.Evt.Energy"]):
     peTimes = batch["HAWCSim.PE.Time"]-batch["HAWCSim.Evt.firstTime"]
     for i in np.arange(ak.num(peTimes,0)):
         # make numpy arrays
@@ -85,10 +88,17 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         app["per90Upper"] = upperPer90[sel]
         app["per90Lower"] = lowerPer90[sel]
         taggedPmtEvts.append(app)
+        # shower info
+        primaries.append((i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i]))
     #break
 
 # save tagged events
-saveTaggedEvts = True
+saveTaggedEvts = False
 if saveTaggedEvts:
     data = np.concatenate(taggedPmtEvts,axis=-1)
     np.save(path+"taggedPmtEvts2.npy",data)
+# save primaries
+savePrimaries = False
+if saveTaggedEvts:
+    data = np.concatenate(primaries,axis=-1)
+    np.save(path+"primaries.npy",data)
