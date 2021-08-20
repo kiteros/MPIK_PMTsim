@@ -1,6 +1,17 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
+TYPE_TAGGED_PMT_EVTS = [("showerID","i4"),("pmtIdG","i4"),("upper","i4"),("lower","i4"),("tagsUpper","int8"),("tagsLower","int8"),("distance","f4"),
+    ("firstUpper","f4"),("firstLower","f4"),("per10Upper","f4"),("per10Lower","f4"),("per90Upper","f4"),("per90Lower","f4")]
+"""
+Data type of `taggedPmtEvents` as used in all functions in this file.
+"""
+
+TYPE_PRIMARIES = [("showerID","i4"),("showerType","i4"),("showerEnergy","f4")]
+"""
+Data type of `primaries` as used in all functions in this file.
+"""
+
 TAG_E = 1
 TAG_MU = 2
 TAG_MESON = 4
@@ -38,7 +49,7 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     yedges - array_like
         histogram yedges
     taggedPmtEvnts - array_like
-        list of PMT events with tags (see TODO)
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     upper - string or array_like
         upper events, default is `"upper"`
     lower - string or array_like
@@ -57,11 +68,7 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     # extract relevant data
     if isinstance(upper,str): upper = taggedPmtEvts[upper]
     if isinstance(lower,str): lower = taggedPmtEvts[lower]
-    tags = taggedPmtEvts["tagsUpper"]
-    tags |= taggedPmtEvts["tagsLower"]
-    # select type
-    eOnly = tags ^ TAG_E == 0
-    muAny = tags & TAG_MU > 0
+    eOnly, muAny = getEMuTags(taggedPmtEvts)
     # histogram
     histEOnly, *_ = np.histogram2d(upper[eOnly],lower[eOnly], bins=[xedges,yedges])
     histMuAny, *_ = np.histogram2d(upper[muAny],lower[muAny], bins=[xedges,yedges])
@@ -79,7 +86,7 @@ def getEMuTags(taggedPmtEvts):
     Parameters
     ----------
     taggedPmtEvnts - array_like
-        list of PMT events with tags (see TODO)
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     
     Returns
     -------
@@ -157,7 +164,7 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, upper="upper", lowe
     yedges - array_like
         histogram yedges
     taggedPmtEvnts - array_like
-        list of PMT events with tags (see TODO)
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     histLR - array_like
         2D likelihood ratio for muon events
     cut - float or array_like
@@ -212,7 +219,6 @@ def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
 
     if not isinstance(cut, np.ndarray):
         cnts = cnts[0]
-    #TODO handle inf/nan in sums
     if not truth: return cnts
     # sum true muons
     eOnly, muAny = getEMuTags(taggedPmtEvts)

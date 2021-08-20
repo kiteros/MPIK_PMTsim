@@ -1,7 +1,6 @@
 from re import X
 import numpy as np
 from matplotlib import pyplot as plt
-from tensorflow.python.ops.gen_math_ops import cumsum
 from shower_analysis import *
 from muon_tagging import MuTagLR
 
@@ -93,6 +92,7 @@ def loadData(protons, gammas, exclusion):
     taggedPmtEvtsG = taggedPmtEvtsG[taggedPmtEvtsG["distance"] > exclusion*100]
     showerIdsG = np.unique(taggedPmtEvtsG["showerID"]).astype(int)
 
+    #TODO ensure valid shower ids and match with primaries, best case: make them usable as index (primaries["showerID"][i] == i)
     taggedPmtEvtsFull = np.concatenate((taggedPmtEvtsG, taggedPmtEvtsP))
 
     # load energies

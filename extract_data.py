@@ -1,16 +1,13 @@
 import uproot
 import awkward as ak
 import numpy as np
-from shower_analysis import TAG_E, TAG_MU, TAG_MESON, TAG_OTHER
+from shower_analysis import TAG_E, TAG_MU, TAG_MESON, TAG_OTHER, TYPE_PRIMARIES, TYPE_TAGGED_PMT_EVTS
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
 
 taggedPmtEvts = []
-tpedt = [("showerID","i4"),("pmtIdG","i4"),("upper","i4"),("lower","i4"),("tagsUpper","int8"),("tagsLower","int8"),("distance","f4"),
-    ("firstUpper","f4"),("firstLower","f4"),("per10Upper","f4"),("per10Lower","f4"),("per90Upper","f4"),("per90Lower","f4")]
 primaries = []
-pridt = [("showerID","i4"),("showerType","i4"),("showerEnergy","f4")]
 path = "data/protonbbww/"
 for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         filter_name=["HAWCSim.Evt.Num","HAWCSim.PE.Time","HAWCSim.Evt.firstTime","HAWCSim.PE.PMTID","HAWCSim.Evt.X","HAWCSim.Evt.Y","HAWCSim.PE.parPType"
@@ -73,7 +70,7 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         lowerPer90[(uspids[uspids%2==1]/2).astype(int)] = per90[uspids%2==1]
         # pass non empty
         sel = np.logical_or(upper > 0,lower > 0)
-        app = np.empty(sel.sum(), dtype=tpedt)
+        app = np.empty(sel.sum(), dtype=TYPE_TAGGED_PMT_EVTS)
         app["showerID"] = (i+report.start)*np.ones(pmtIdG[sel].shape)
         app["pmtIdG"] = pmtIdG[sel]
         app["upper"] = upper[sel]
@@ -89,6 +86,7 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         app["per90Lower"] = lowerPer90[sel]
         taggedPmtEvts.append(app)
         # shower info
+        #TODO ensure data type
         primaries.append((i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i]))
     #break
 
