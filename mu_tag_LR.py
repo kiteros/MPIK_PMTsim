@@ -62,46 +62,25 @@ def plotRatioEMu(taggedPmtEvts, primaries):
     cdx = taggedPmtEvts["showerID"]
     eCnt, ids = magicCumsum(cdx,eOnlyP,True)
     muCnt, ids = magicCumsum(cdx,muAnyP,True)
-    #TODO plot into protons/gammas
+    selP = primaries["showerType"][ids] == ID_PROTON
+    selG = primaries["showerType"][ids] == ID_PHOTON
+    #plot into protons/gammas
     plt.figure(1)
     plt.title("Electron muon ratio")
-    plt.scatter(muCnt[primaries["showerType"][ids] == ID_PROTON],eCnt[primaries["showerType"][ids] == ID_PROTON],label="Protons",marker=".")
-    plt.scatter(muCnt[primaries["showerType"][ids] == ID_PHOTON],eCnt[primaries["showerType"][ids] == ID_PHOTON],label="Gammas",marker="^")
+    plt.scatter(muCnt[selP],eCnt[selP],label="Protons",marker=".")
+    plt.scatter(muCnt[selG],eCnt[selG],label="Gammas",marker="^")
     plt.xlabel("Muon events")
     plt.ylabel("Electron only events")
     plt.legend()
     # plot muon electron ratio
     plt.figure(2)
     plt.title("Electron muon ratio")
-    plt.scatter(primaries[ids][primaries["showerType"][ids] == ID_PROTON]["showerEnergy"]/1000,muCnt[primaries["showerType"][ids] == ID_PROTON]/eCnt[primaries["showerType"][ids] == ID_PROTON],label="Protons",marker=".")
-    plt.scatter(primaries[ids][primaries["showerType"][ids] == ID_PHOTON]["showerEnergy"]/1000,muCnt[primaries["showerType"][ids] == ID_PHOTON]/eCnt[primaries["showerType"][ids] == ID_PHOTON],label="Gammas",marker="^")
+    plt.scatter(primaries["showerEnergy"][ids][selP]/1000,muCnt[selP]/eCnt[selP],label="Protons",marker=".")
+    plt.scatter(primaries["showerEnergy"][ids][selG]/1000,muCnt[selG]/eCnt[selG],label="Gammas",marker="^")
     plt.xlabel("Energy/TeV")
     plt.ylabel("$N_\mu/N_e$")
     plt.legend()
     return eCnt,muCnt
-
-def loadData(paths, exclusion):
-    # load files
-    tpes = []
-    primaries = []
-    offset = 0
-    for path in paths:
-        tpe = np.load(path+"taggedPmtEvts2.npy")
-        tpe = tpe[tpe["distance"] > exclusion*100]
-        tpe["showerID"] += offset
-        tpes.append(tpe)
-        pri = np.load(path+"primaries.npy")
-        pri["showerID"] += offset
-        primaries.append(pri)
-        offset += pri.shape[0]
-
-    # concatenate
-    taggedPmtEvtsFull = np.concatenate(tpes)
-    primaries = np.concatenate(primaries)
-    #TODO ensure even for bad showerIDs
-    assert np.all([primaries["showerID"][i] == i for i in np.arange(primaries.shape[0])])
-
-    return taggedPmtEvtsFull,primaries
 
 # --- start ---
 if __name__ == "__main__":
@@ -119,6 +98,9 @@ if __name__ == "__main__":
 
     # calculate likelihood ratio
     *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
+
+    # make muon tagger
+    mt = MuTagLR(xedges,yedges,histLR)
 
     # plot muon vs electron count
     eCnt, muCnt = plotRatioEMu(taggedPmtEvts,primaries)
@@ -138,10 +120,10 @@ if __name__ == "__main__":
 
 
     # tag events
-    cntsP, tCntsP = tagShowers(xedges, yedges, taggedPmtEvtsP, histLR, cut=cuts, truth=True, ratio=True)
-
-    # repeat for gammas
-    cntsG, tCntsG = tagShowers(xedges, yedges, taggedPmtEvtsG, histLR, cut=cuts, truth=True, ratio=True)
+    cnts, tCnts, ids = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True, ratio=True, makeIds=True)
+    selP = primaries["showerType"][ids] == ID_PROTON
+    selG = primaries["showerType"][ids] == ID_PHOTON
+    
 
     # plot counts/ratios again
     '''
@@ -152,13 +134,15 @@ if __name__ == "__main__":
     plt.scatter(cntsG[0],eCntsG,label="Gammas (estimated)",marker="^")
     plt.legend()#'''
     plt.figure(2)
-    plt.scatter(energyP/1000,cntsP[0],label="Protons (estimated)",marker=".")
-    plt.scatter(energyG/1000,cntsG[0],label="Gammas (estimated)",marker="^")
+    plt.scatter(primaries["showerEnergy"][ids][selP]/1000,cnts[0][selP],label="Protons (estimated)",marker=".")
+    plt.scatter(primaries["showerEnergy"][ids][selG]/1000,cnts[0][selG],label="Gammas (estimated)",marker="^")
     plt.legend()
     plt.figure()
     plt.title("Correlation")
-    plt.scatter(muCntP/eCntP,cntsP[0],label="Protons",marker=".")
-    plt.scatter(muCntG/eCntG,cntsG[0],label="Gammas",marker="^")
+    plt.scatter(muCnt[selP]/eCnt[selP],cnts[0][selP],label="Protons",marker=".")
+    plt.scatter(muCnt[selG]/eCnt[selG],cnts[0][selG],label="Gammas",marker="^")
+    plt.xscale("log")
+    plt.yscale("log")
     plt.legend()
 
     # plot
@@ -185,9 +169,9 @@ if __name__ == "__main__":
     plt.colorbar(label="minimum muons per shower")
     #'''
 
-    energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG)
+    #energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG)
 
-    # make muon tagger
-    MuTagLR(xedges,yedges,histLR).save("models/mu_tag_LR_PEs")
+    # save muon tagger
+    mt.save("models/mu_tag_LR_PEs")
 
     plt.show()

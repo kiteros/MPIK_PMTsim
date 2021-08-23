@@ -25,7 +25,7 @@ def makeTag(parts):
 
     Parameters
     ----------
-    parts - array_like
+    parts : array_like
         list of particle IDs
     
     Returns
@@ -41,32 +41,77 @@ def makeTag(parts):
         else: tag |= TAG_OTHER
     return tag
 
+def loadData(paths, exclusion=0):
+    """
+    Loads data from a list of paths.
+
+    Parameters
+    ----------
+    paths : array_like
+        list of path names
+    exclusion : float, optional
+        size of exclusion area in m, default is 0
+    
+    Returns
+    -------
+    taggedPmtEvts : structured array
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
+    primaries : structured array
+        list of primary particles (see `TYPE_PRIMARIES`)
+    """
+    # load files
+    tpes = []
+    primaries = []
+    offset = 0
+    for path in paths:
+        tpe = np.load(path+"taggedPmtEvts2.npy")
+        tpe = tpe[tpe["distance"] > exclusion*100]
+        tpe["showerID"] += offset
+        tpes.append(tpe)
+        pri = np.load(path+"primaries.npy")
+        pri["showerID"] += offset
+        primaries.append(pri)
+        offset += pri.shape[0]
+
+    # concatenate
+    taggedPmtEvtsFull = np.concatenate(tpes)
+    primaries = np.concatenate(primaries)
+    #TODO ensure even for bad showerIDs
+    assert np.all([primaries["showerID"][i] == i for i in np.arange(primaries.shape[0])])
+
+    return taggedPmtEvtsFull,primaries
+
 def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     """
     Makes histograms from tagged PMT events.
 
     Parameters
     ----------
-    xedges - array_like
+    xedges : array_like
         histogram xedges
-    yedges - array_like
+    yedges : array_like
         histogram yedges
-    taggedPmtEvnts - array_like
+    taggedPmtEvnts : array_like
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
-    upper - string or array_like
+    upper : string or array_like
         upper events, default is `"upper"`
-    lower - string or array_like
+    lower : string or array_like
         lower events, default is `"lower"`
     
     Returns
     -------
-    tuple of ndarray
-        upper - events in upper chamber
-        lower - events in lower chamber
-        muAny - if an muon is in the chamber
-        histEOnly - histogram for electron only events
-        histMuAny - histogram for muon events
-        histLR - likelihood ratio of a muon event
+    upper : ndarray
+        events in upper chamber
+    lower : ndarray
+        events in lower chamber
+    muAny : ndarray
+        if an muon is in the chamber
+    histEOnly : ndarray
+        histogram for electron only events
+    histMuAny : ndarray
+        histogram for muon events
+    histLR : ndarray
+        likelihood ratio of a muon event
     """
     # extract relevant data
     if isinstance(upper,str): upper = taggedPmtEvts[upper]
@@ -88,13 +133,15 @@ def getEMuTags(taggedPmtEvts):
 
     Parameters
     ----------
-    taggedPmtEvnts - array_like
+    taggedPmtEvnts : array_like
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     
     Returns
     -------
-    tuple of ndarray
-        bool arrays for electron only events and events with muons
+    eOnly : ndarray
+        bool array for electron only events
+    muAny : ndarray
+        bool array for events with muons
     """
     tags = taggedPmtEvts["tagsUpper"]
     tags |= taggedPmtEvts["tagsLower"]
@@ -108,13 +155,13 @@ def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", yla
 
     Parameters
     ----------
-    xedges - array_like
+    xedges : array_like
         histogram xedges
-    yedges - array_like
+    yedges : array_like
         histogram yedges
-    hist - array_like
+    hist : array_like
         particle tag (bitwise or of TAG_* values)
-    ylabel - string
+    ylabel : string
         label of y axis, default is `"lower cell PEs"`
     """
     plt.figure()
@@ -132,15 +179,15 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
 
     Parameters
     ----------
-    xedges - array_like
+    xedges : array_like
         histogram xedges
-    yedges - array_like
+    yedges : array_like
         histogram yedges
-    upper - array_like
+    upper : array_like
         PEs in upper chamber
-    lower - array_like
+    lower : array_like
         PEs in lower chamber
-    histLR - array_like
+    histLR : array_like
         likelihood ratio of a muon event
     
     Returns
@@ -163,22 +210,22 @@ def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, upper="upper", lowe
 	Parameters
 	----------
 
-    xedges - array_like
+    xedges : array_like
         histogram xedges
-    yedges - array_like
+    yedges : array_like
         histogram yedges
-    taggedPmtEvnts - array_like
+    taggedPmtEvnts : array_like
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
-    histLR - array_like
+    histLR : array_like
         2D likelihood ratio for muon events
-    cut - float or array_like
+    cut : float or array_like
         value of likelihood ratio above which events are counted as muons;
         can be an array of multiple cuts, default is 1
-    truth - bool
+    truth : bool
         if True, returns true number of muon events, default is False
-    upper - string or array_like
+    upper : string or array_like
         upper events, default is `"upper"`
-    lower - string or array_like
+    lower : string or array_like
         lower events, default is `"lower"`
 
 	Returns
@@ -199,7 +246,7 @@ def tagShowersMT(muonTagger, taggedPmtEvts, cut=1, **kwargs):
     score = muonTagger.muonScore(taggedPmtEvts)
     return tagShowersS(taggedPmtEvts,score,cut,**kwargs)
 
-def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
+def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False, makeIds=False):
     # get shower indices
     cdx = taggedPmtEvts["showerID"]
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
@@ -223,7 +270,7 @@ def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
 
     if not isinstance(cut, np.ndarray):
         cnts = cnts[0]
-    if not truth: return cnts
+    if not truth: return (cnts, cdx[idx]) if makeIds else cnts
     # sum true muons
     eOnly, muAny = getEMuTags(taggedPmtEvts)
     cumsums = np.cumsum(muAny)[idx]
@@ -234,7 +281,7 @@ def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
         cumsums = np.cumsum(eOnly)[idx]
         cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
         cnts[i,0] /= cumsums[0]
-    return cnts, tCnts
+    return (cnts, tCnts, cdx[idx]) if makeIds else (cnts, tCnts)
 
 def magicCumsum(cdx,values,makeIds=False):
     """
@@ -243,15 +290,19 @@ def magicCumsum(cdx,values,makeIds=False):
 
     Parameters
     ----------
-    cdx - array_like
+    cdx : array_like
         sorted array of repeating event ids
-    values - array_like
+    values : array_like
         values to sum up
+    makeIds : bool
+        if True returns unique event ids, default is False
     
     Returns
     -------
-    ndarray
+    cnts : ndarray
         sum of values with same cdx
+    ids : ndarray
+        unique event ids (only if makeIds is True)
     """
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
     idx = np.empty(indices.shape, dtype=int)
@@ -277,15 +328,15 @@ def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
 
     Parameters
     ----------
-	labels - array_like
+	labels : array_like
         labels for the created plots
-    cntsP - list of array_like
+    cntsP : list of array_like
 		proton counts (number of arrays matches size of labels)
-    cntsG - list of array_like
+    cntsG : list of array_like
 		gamma counts (number of arrays matches size of labels)
-    sep - array_like
+    sep : array_like
         separation cuts to plot, default is `np.linspace(0,200)`
-    plot - bool
+    plot : bool
         if the results should be plotted, default is `True`
 
     Returns
@@ -322,9 +373,9 @@ def profilePoints(xs, ys):
 
 	Parameters
 	----------
-	xs - array_like
+	xs : array_like
 		list of x coordinates
-	ys - array_like
+	ys : array_like
 		list of y coordinates
 	
 	Returns
@@ -351,11 +402,11 @@ def plotROC(muAny, muScore, cuts):
 
 	Parameters
 	----------
-	muAny - array_like
+	muAny : array_like
 		bool array of true muon events
-	muScore - array_like
+	muScore : array_like
 		score to plot ROC curve for
-    cuts - array_like
+    cuts : array_like
         cuts to plot
     """
     falseMu = np.zeros(cuts.shape)
