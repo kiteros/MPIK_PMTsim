@@ -3,15 +3,15 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from shower_analysis import getEMuTags, plotROC, tagShowers, energyDependentAnalysis
+from shower_analysis import getEMuTags, loadData, plotROC, tagShowers, energyDependentAnalysis
 from numpy.lib import recfunctions as rfn
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve
 from keras.callbacks import EarlyStopping
 
 # setup net
-trainModel = False
-filename = "models/mu_tag_ML_at6uw"
+trainModel = True
+filename = "models/mu_tag_ML_at6uwf"
 if trainModel:
     inputs = keras.Input(shape=(6,))
     x = layers.Dense(6, activation="relu")(inputs)
@@ -24,9 +24,8 @@ else:
     model = keras.models.load_model(filename)
 
 # load data
-path = "data/protonbbww/"
-taggedPmtEvts = np.load(path+"taggedPmtEvts2.npy")
-taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
+paths = ["data/protonbbww/","data/gammabbww/"]
+taggedPmtEvts, primaries = loadData(paths,20)
 inputs = model.get_layer("input_1").get_config()["batch_input_shape"][1]
 if inputs == 8:
     data = taggedPmtEvts[["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]]
@@ -43,19 +42,19 @@ _, muAny = getEMuTags(taggedPmtEvts)
 # prepare training data
 idx = np.arange(data.shape[0])
 np.random.default_rng().shuffle(idx)
-train, test = np.split(idx,[int(data.shape[0]*0.9)])
+#TODO how to get good statistics and a reasonable size?
+train, test = np.split(idx,[int(data.shape[0]*0.1)])
 #train = train[muAny[train]*1 + np.random.random(muAny[train].shape) > 1-muAny[train].sum()/train.size] # sample down
 x_train = data[train]
 x_test = data[test]
 y_train = muAny[train]*1
 y_test = muAny[test]*1
 print(y_train.sum()/y_train.size)
-weights = {0: y_train.size/(y_train.size-y_train.sum()), 1: y_train.size/y_train.sum()}
+#weights = {0: y_train.size/(y_train.size-y_train.sum()), 1: y_train.size/y_train.sum()}
 
 # train model
 if trainModel:
-    history = model.fit(x_train, y_train, batch_size=64, epochs=20, validation_split=0.2, callbacks=[EarlyStopping(patience=3,restore_best_weights=True)],
-        class_weight=weights)
+    history = model.fit(x_train, y_train, batch_size=64, epochs=20, validation_split=0.2, callbacks=[EarlyStopping(patience=3,restore_best_weights=True)])
     model.save(filename)
 
 # test model
@@ -78,8 +77,7 @@ plt.colorbar()
 
 # energy dependent analysis
 mt = MuTagML(model)
-gammas = "data/gammabbww/"
-protons = "data/protonbbww/"
+#TODO actually do this on the test data and not everything
 
 # settings
 edst = False
@@ -96,19 +94,10 @@ else:
 plotHists = False
 
 # tag showers
-taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
-taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
-cntsP, tCntsP = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
-
-# repeat for gammas
-taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
-taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-cntsG, tCntsG = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
+cnts, tCnts, ids = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True, ratio=True, makeIds=True)
 
 # analyse
-#TODO update
-#energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)
+energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
 
 # show plots
 plt.show()
