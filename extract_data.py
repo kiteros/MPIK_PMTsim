@@ -14,6 +14,7 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         ,"HAWCSim.Evt.pType","HAWCSim.Evt.Energy"]):
     peTimes = batch["HAWCSim.PE.Time"]-batch["HAWCSim.Evt.firstTime"]
     for i in np.arange(ak.num(peTimes,0)):
+        #'''
         # make numpy arrays
         pmtIds = batch["HAWCSim.PE.PMTID"][i].to_numpy()
         partIds = batch["HAWCSim.PE.parPType"][i].to_numpy()
@@ -84,10 +85,9 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         app["per10Lower"] = lowerPer10[sel]
         app["per90Upper"] = upperPer90[sel]
         app["per90Lower"] = lowerPer90[sel]
-        taggedPmtEvts.append(app)
+        taggedPmtEvts.append(app)#'''
         # shower info
-        #TODO ensure data type
-        primaries.append((i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i]))
+        primaries.append(np.array([(i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i])],dtype=TYPE_PRIMARIES))
     #break
 
 # save tagged events
@@ -97,6 +97,6 @@ if saveTaggedEvts:
     np.save(path+"taggedPmtEvts2.npy",data)
 # save primaries
 savePrimaries = False
-if saveTaggedEvts:
+if savePrimaries:
     data = np.concatenate(primaries,axis=-1)
     np.save(path+"primaries.npy",data)

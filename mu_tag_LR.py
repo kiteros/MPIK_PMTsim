@@ -1,4 +1,3 @@
-from re import X
 import numpy as np
 from matplotlib import pyplot as plt
 from shower_analysis import *
@@ -58,48 +57,51 @@ def energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eB
     plt.ylabel("Estimated muons number")
     plt.legend()#'''
 
-def plotRatioEMu(taggedPmtEvtsP, taggedPmtEvtsG, energyP, energyG):
-    eOnlyP, muAnyP = getEMuTags(taggedPmtEvtsP)
-    cdx = taggedPmtEvtsP["showerID"]
-    eCntP = magicCumsum(cdx,eOnlyP)
-    muCntP = magicCumsum(cdx,muAnyP)
-    eOnlyG, muAnyG = getEMuTags(taggedPmtEvtsG)
-    cdx = taggedPmtEvtsG["showerID"]
-    eCntG = magicCumsum(cdx,eOnlyG)
-    muCntG = magicCumsum(cdx,muAnyG)
+def plotRatioEMu(taggedPmtEvts, primaries):
+    eOnlyP, muAnyP = getEMuTags(taggedPmtEvts)
+    cdx = taggedPmtEvts["showerID"]
+    eCnt, ids = magicCumsum(cdx,eOnlyP,True)
+    muCnt, ids = magicCumsum(cdx,muAnyP,True)
+    #TODO plot into protons/gammas
     plt.figure(1)
     plt.title("Electron muon ratio")
-    plt.scatter(muCntP,eCntP,label="Protons",marker=".")
-    plt.scatter(muCntG,eCntG,label="Gammas",marker="^")
+    plt.scatter(muCnt[primaries["showerType"][ids] == ID_PROTON],eCnt[primaries["showerType"][ids] == ID_PROTON],label="Protons",marker=".")
+    plt.scatter(muCnt[primaries["showerType"][ids] == ID_PHOTON],eCnt[primaries["showerType"][ids] == ID_PHOTON],label="Gammas",marker="^")
     plt.xlabel("Muon events")
     plt.ylabel("Electron only events")
     plt.legend()
     # plot muon electron ratio
     plt.figure(2)
     plt.title("Electron muon ratio")
-    plt.scatter(energyP/1000,muCntP/eCntP,label="Protons",marker=".")
-    plt.scatter(energyG/1000,muCntG/eCntG,label="Gammas",marker="^")
+    plt.scatter(primaries[ids][primaries["showerType"][ids] == ID_PROTON]["showerEnergy"]/1000,muCnt[primaries["showerType"][ids] == ID_PROTON]/eCnt[primaries["showerType"][ids] == ID_PROTON],label="Protons",marker=".")
+    plt.scatter(primaries[ids][primaries["showerType"][ids] == ID_PHOTON]["showerEnergy"]/1000,muCnt[primaries["showerType"][ids] == ID_PHOTON]/eCnt[primaries["showerType"][ids] == ID_PHOTON],label="Gammas",marker="^")
     plt.xlabel("Energy/TeV")
     plt.ylabel("$N_\mu/N_e$")
     plt.legend()
-    return eCntP,muCntP,eCntG,muCntG
+    return eCnt,muCnt
 
-def loadData(protons, gammas, exclusion):
-    taggedPmtEvtsP = np.load(protons+"taggedPmtEvts2.npy")
-    taggedPmtEvtsP = taggedPmtEvtsP[taggedPmtEvtsP["distance"] > exclusion*100]
-    showerIdsP = np.unique(taggedPmtEvtsP["showerID"]).astype(int)
-    taggedPmtEvtsG = np.load(gammas+"taggedPmtEvts2.npy")
-    taggedPmtEvtsG = taggedPmtEvtsG[taggedPmtEvtsG["distance"] > exclusion*100]
-    showerIdsG = np.unique(taggedPmtEvtsG["showerID"]).astype(int)
+def loadData(paths, exclusion):
+    # load files
+    tpes = []
+    primaries = []
+    offset = 0
+    for path in paths:
+        tpe = np.load(path+"taggedPmtEvts2.npy")
+        tpe = tpe[tpe["distance"] > exclusion*100]
+        tpe["showerID"] += offset
+        tpes.append(tpe)
+        pri = np.load(path+"primaries.npy")
+        pri["showerID"] += offset
+        primaries.append(pri)
+        offset += pri.shape[0]
 
-    #TODO ensure valid shower ids and match with primaries, best case: make them usable as index (primaries["showerID"][i] == i)
-    taggedPmtEvtsFull = np.concatenate((taggedPmtEvtsG, taggedPmtEvtsP))
+    # concatenate
+    taggedPmtEvtsFull = np.concatenate(tpes)
+    primaries = np.concatenate(primaries)
+    #TODO ensure even for bad showerIDs
+    assert np.all([primaries["showerID"][i] == i for i in np.arange(primaries.shape[0])])
 
-    # load energies
-    energyP = np.load(protons+"energy.npy")
-    energyG = np.load(gammas+"energy.npy")
-    energyP = energyP[showerIdsP]
-    return taggedPmtEvtsP,showerIdsP,taggedPmtEvtsG,taggedPmtEvtsFull,energyP,energyG
+    return taggedPmtEvtsFull,primaries
 
 # --- start ---
 if __name__ == "__main__":
@@ -113,13 +115,13 @@ if __name__ == "__main__":
 
     # load events
     exclusion = 0
-    taggedPmtEvtsP, showerIdsP, taggedPmtEvtsG, taggedPmtEvtsFull, energyP, energyG = loadData(protons, gammas, exclusion)
+    taggedPmtEvts,primaries = loadData([protons, gammas], exclusion)
 
     # calculate likelihood ratio
-    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvtsFull)
+    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
 
     # plot muon vs electron count
-    eCntP, muCntP, eCntG, muCntG = plotRatioEMu(taggedPmtEvtsP, taggedPmtEvtsG, energyP, energyG)
+    eCnt, muCnt = plotRatioEMu(taggedPmtEvts,primaries)
 
     # select what to do
     edst = True

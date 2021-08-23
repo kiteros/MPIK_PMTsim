@@ -8,7 +8,7 @@ from mu_tag_LR import energyDependentAnalysis
 # load muon taggers
 mtLR = MuTagLR().load("models/mu_tag_LR_PEs")
 mtRise = MuTagRise().load("models/mu_tag_LR_rise")
-mtML = MuTagML().load("models/mu_tag_ML")
+mtML = MuTagML().load("models/mu_tag_ML_at6uw")
 mtSum = SumTagger([mtRise, mtLR])
 
 # load data

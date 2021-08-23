@@ -12,6 +12,9 @@ TYPE_PRIMARIES = [("showerID","i4"),("showerType","i4"),("showerEnergy","f4")]
 Data type of `primaries` as used in all functions in this file.
 """
 
+ID_PHOTON = 1
+ID_PROTON = 14
+
 TAG_E = 1
 TAG_MU = 2
 TAG_MESON = 4
@@ -109,7 +112,8 @@ def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", yla
         histogram xedges
     yedges - array_like
         histogram yedges
-    hist - array_likeparticle tag (bitwise or of TAG_* values)`
+    hist - array_like
+        particle tag (bitwise or of TAG_* values)
     ylabel - string
         label of y axis, default is `"lower cell PEs"`
     """
@@ -232,7 +236,7 @@ def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False):
         cnts[i,0] /= cumsums[0]
     return cnts, tCnts
 
-def magicCumsum(cdx,values):
+def magicCumsum(cdx,values,makeIds=False):
     """
     Sums over values with same cdx.
     `cnts = [np.sum(values[cdx == id]) for id in np.unique(cdx)]`
@@ -257,7 +261,11 @@ def magicCumsum(cdx,values):
     cnts = np.empty(cumsums.shape)
     cnts[1:] = cumsums[1:] - cumsums[0:-1]
     cnts[0] = cumsums[0]
-    return cnts
+    if makeIds:
+        ids = cdx[idx]
+        return cnts, ids
+    else:
+        return cnts
 
 
 def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
