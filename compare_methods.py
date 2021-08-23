@@ -3,7 +3,6 @@ from muon_tagging import *
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve
 from shower_analysis import *
-from mu_tag_LR import energyDependentAnalysis
 
 # load muon taggers
 mtLR = MuTagLR().load("models/mu_tag_LR_PEs")

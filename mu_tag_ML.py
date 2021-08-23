@@ -3,12 +3,11 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from shower_analysis import getEMuTags, plotROC, tagShowersMT
+from shower_analysis import getEMuTags, plotROC, tagShowers, energyDependentAnalysis
 from numpy.lib import recfunctions as rfn
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve
 from keras.callbacks import EarlyStopping
-from mu_tag_LR import energyDependentAnalysis
 
 # setup net
 trainModel = False
@@ -100,15 +99,16 @@ plotHists = False
 taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
 taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
 showerIdsP = np.unique(taggedPmtEvts["showerID"]).astype(int)
-cntsP, tCntsP = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
+cntsP, tCntsP = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
 
 # repeat for gammas
 taggedPmtEvts = np.load(gammas+"taggedPmtEvts2.npy")
 taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
-cntsG, tCntsG = tagShowersMT(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
+cntsG, tCntsG = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True,ratio=True)
 
 # analyse
-energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)
+#TODO update
+#energyDependentAnalysis(protons, gammas, showerIdsP, plotEdst, cuts, sep, eBinCnt, cntsP, tCntsP, cntsG, tCntsG, False)
 
 # show plots
 plt.show()

@@ -91,7 +91,7 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
         histogram xedges
     yedges : array_like
         histogram yedges
-    taggedPmtEvnts : array_like
+    taggedPmtEvts : structured array
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     upper : string or array_like
         upper events, default is `"upper"`
@@ -133,7 +133,7 @@ def getEMuTags(taggedPmtEvts):
 
     Parameters
     ----------
-    taggedPmtEvnts : array_like
+    taggedPmtEvts : structured array
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     
     Returns
@@ -202,51 +202,36 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     muLR = histLR[uppIdx, lowIdx]
     return muLR
 
-
-def tagShowers(xedges, yedges, taggedPmtEvts, histLR, cut=1, upper="upper", lower="lower", **kwargs):
+def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeIds=False):
     """
 	Counts muons in showers based on their `muonScore()`.
 
 	Parameters
 	----------
-
-    xedges : array_like
-        histogram xedges
-    yedges : array_like
-        histogram yedges
-    taggedPmtEvnts : array_like
+    muonTagger : MuonTagger
+        the muon tagger to calculate the scores with
+    taggedPmtEvts : structured array
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
-    histLR : array_like
-        2D likelihood ratio for muon events
     cut : float or array_like
-        value of likelihood ratio above which events are counted as muons;
+        value of muon score above which events are counted as muons;
         can be an array of multiple cuts, default is 1
-    truth : bool
+    truth : bool, optional
         if True, returns true number of muon events, default is False
-    upper : string or array_like
-        upper events, default is `"upper"`
-    lower : string or array_like
-        lower events, default is `"lower"`
+    ratio : bool, optional
+        if True, calculates the electron muon ratio instead of muon counts, default is False
+    makeIds : bool
+        if True returns shower ids, default is False
 
 	Returns
-	-------
-    
-    ndarray or tuple of ndarray
-        an array of muon counts for each shower or multiple arrays if cut is an array;
-        if truth is True the true muon count for each shower is returned as second array
+	-------    
+    cnts : ndarray
+        array of muon counts for each shower or multiple arrays if cut is an array
+    tCnts : ndarray
+        array of true muon counts for each shower (only if truth is True)
+    ids : ndarray
+        array of shower ids (only if makeIds is True)
 	"""
-    if isinstance(upper,str): upper = taggedPmtEvts[upper]
-    if isinstance(lower,str): lower = taggedPmtEvts[lower]
-    # calculate muon score
-    score = muonScoreLR(xedges, yedges, upper, lower, histLR)
-    # tag showers
-    return tagShowersS(taggedPmtEvts,score,cut,**kwargs)
-
-def tagShowersMT(muonTagger, taggedPmtEvts, cut=1, **kwargs):
     score = muonTagger.muonScore(taggedPmtEvts)
-    return tagShowersS(taggedPmtEvts,score,cut,**kwargs)
-
-def tagShowersS(taggedPmtEvts, score, cut=1, truth=False, ratio=False, makeIds=False):
     # get shower indices
     cdx = taggedPmtEvts["showerID"]
     indices = np.nonzero(np.r_[1, np.diff(cdx)[:-1]])[0]
@@ -318,6 +303,49 @@ def magicCumsum(cdx,values,makeIds=False):
     else:
         return cnts
 
+def plotRatioEMu(taggedPmtEvts, primaries):
+    """
+	Plots the ratio between muons and electrons.
+    Figure 1 shows electron only events over muon events.
+    Figure 2 shows electron muon ratio over energy.
+
+    Parameters
+    ----------
+    taggedPmtEvts : structured array
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
+    primaries : structured array
+        list of primary particles (see `TYPE_PRIMARIES`)
+
+    Returns
+    -------
+	eCnt : ndarray
+        electron only event counts
+    muCnt : ndarray
+        muon event counts
+	"""
+    eOnlyP, muAnyP = getEMuTags(taggedPmtEvts)
+    cdx = taggedPmtEvts["showerID"]
+    eCnt, ids = magicCumsum(cdx,eOnlyP,True)
+    muCnt, ids = magicCumsum(cdx,muAnyP,True)
+    selP = primaries["showerType"][ids] == ID_PROTON
+    selG = primaries["showerType"][ids] == ID_PHOTON
+    #plot into protons/gammas
+    plt.figure(1)
+    plt.title("Electron muon ratio")
+    plt.scatter(muCnt[selP],eCnt[selP],label="Protons",marker=".")
+    plt.scatter(muCnt[selG],eCnt[selG],label="Gammas",marker="^")
+    plt.xlabel("Muon events")
+    plt.ylabel("Electron only events")
+    plt.legend()
+    # plot muon electron ratio
+    plt.figure(2)
+    plt.title("Electron muon ratio")
+    plt.scatter(primaries["showerEnergy"][ids][selP]/1000,muCnt[selP]/eCnt[selP],label="Protons",marker=".")
+    plt.scatter(primaries["showerEnergy"][ids][selG]/1000,muCnt[selG]/eCnt[selG],label="Gammas",marker="^")
+    plt.xlabel("Energy/TeV")
+    plt.ylabel("$N_\mu/N_e$")
+    plt.legend()
+    return eCnt,muCnt
 
 def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
     """
@@ -395,6 +423,84 @@ def profilePoints(xs, ys):
         y[i] = np.mean(ys[sel])
         yerr[i] = np.std(ys[sel])
     return x,y,yerr,xerr
+
+def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=True, eBinCnt=4, plotProfiles=True):
+    """
+	Creates multiple plots for energy dependent shower analysis.
+    Figure 4 shows profile lines for muon number-energy dependece.
+    Figure 5 shows ROC curves for different energies and cuts.
+    Figure 6 shows the optimal cuts for each energy based on SBR.
+
+    Parameters
+    ----------
+    cnts - ndarray, shape(cuts.size,N)
+        array of counts for each cut
+    tCnts - ndarray, shape(N)
+        array of true counts
+    cuts - ndarray
+        array of cuts (floats)
+    sep - ndarray
+        array of separation cuts (counts)
+    ids - ndarray, shape(N)
+        array of shower ids
+    primaries : structured array
+        list of primary particles (see `TYPE_PRIMARIES`)
+    plotEdst - bool, optional
+        plot figure 5, default is True
+    eBinCnt - int, optional
+        number of energy bins, default is 4
+    plotProfiles - bool, optional
+        plot figure 4, default is True
+	"""
+    selP = primaries["showerType"][ids] == ID_PROTON
+    selG = primaries["showerType"][ids] == ID_PHOTON
+    # plot
+    if plotProfiles:
+        plt.figure(4)
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG], tCnts[selG]), label="gammas")
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selP], tCnts[selP]), label="protons")
+        plt.xlabel("Energy")
+        plt.ylabel("Muons")
+
+    # energy dependent cuts
+    if plotEdst:
+        plt.figure(5)
+        plt.title("Energy dependent shower tagging")
+    energyBins = np.histogram_bin_edges(primaries["showerEnergy"][ids],eBinCnt)
+    snrBest = np.empty((energyBins.size-1,5))
+    for minE, maxE, i in zip(energyBins[:-1],energyBins[1:], np.arange(snrBest.size)):
+        selE = np.logical_and(primaries["showerEnergy"][ids] > minE, primaries["showerEnergy"][ids] < maxE)
+        cntsPed = cnts[:,selE&selP]
+        cntsGed = cnts[:,selE&selG]
+        snr = plotSeparationCuts(np.array(["{:.1f}@{:.0f}-{:.0f}TeV".format(c,minE/1000,maxE/1000) for c in cuts]),cntsPed,cntsGed,sep=sep,plot=plotEdst)
+        amax = np.unravel_index(np.nanargmax(snr), snr.shape)
+        snrBest[i] = np.array([amax[0], amax[1], np.nanmax(snr), minE, maxE])
+    if plotEdst:
+        plt.colorbar(label="minimum muons per shower")
+
+    # plot signal to background ratio
+    plt.figure(6)
+    plt.title("Signal to background ratio")
+    plt.scatter(cuts[snrBest[:,0].astype(int)],sep[snrBest[:,1].astype(int)],c=np.log(snrBest[:,2]))
+    for x,y,snr,minE,maxE in snrBest:
+        plt.annotate("{:.0f}-{:.0f}TeV".format(minE/1000,maxE/1000),(cuts[int(x)],sep[int(y)]))
+    plt.colorbar(label="log(signal to background ratio)")
+    plt.xlabel("LR cut")
+    plt.ylabel("Muon cut")
+
+    # plot muon estimates
+    '''TODO fix or remove
+    plt.figure()
+    plt.title("Muon counts")
+    for x,y,snr,minE,maxE in snrBest:
+        sel = np.logical_and(energyP > minE, energyP < maxE)
+        plt.scatter(tCntsP[sel], cntsP[int(x)][sel]-tCntsP[sel], label="{:.1f}@{:.0f}-{:.0f}TeV".format(cuts[int(x)],minE/1000,maxE/1000),marker=".")
+        sel = np.logical_and(energyG > minE, energyG < maxE)
+        plt.scatter(tCntsG[sel], cntsG[int(x)][sel]-tCntsG[sel], label="{:.1f}@{:.0f}-{:.0f}TeV".format(cuts[int(x)],minE/1000,maxE/1000),marker="^")
+    plt.plot([0,tCntsP.max()],[0,0])
+    plt.xlabel("True muon number")
+    plt.ylabel("Estimated muons number")
+    plt.legend()#'''
 
 def plotROC(muAny, muScore, cuts):
     """
