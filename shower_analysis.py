@@ -202,7 +202,7 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     muLR = histLR[uppIdx, lowIdx]
     return muLR
 
-def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeIds=False):
+def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeIds=False, proportion=False):
     """
 	Counts muons in showers based on their `muonScore()`.
 
@@ -219,8 +219,10 @@ def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeI
         if True, returns true number of muon events, default is False
     ratio : bool, optional
         if True, calculates the electron muon ratio instead of muon counts, default is False
-    makeIds : bool
+    makeIds : bool, optional
         if True returns shower ids, default is False
+    proportion : bool, optional
+        if True, calculates the muon proportion instead of muon counts, default is False (ignored if `ratio=True`)
 
 	Returns
 	-------    
@@ -252,6 +254,10 @@ def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeI
             cumsums = np.cumsum(score <= cuts[i])[idx]
             cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
             cnts[i,0] /= cumsums[0]
+        elif proportion:
+            cumsums = np.cumsum(np.ones(cdx.shape))[idx]
+            cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
+            cnts[i,0] /= cumsums[0]
 
     if not isinstance(cut, np.ndarray):
         cnts = cnts[0]
@@ -264,8 +270,12 @@ def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeI
     tCnts[0] = cumsums[0]
     if ratio:
         cumsums = np.cumsum(eOnly)[idx]
-        cnts[i,1:] /= cumsums[1:] - cumsums[0:-1]
-        cnts[i,0] /= cumsums[0]
+        tCnts[1:] /= cumsums[1:] - cumsums[0:-1]
+        tCnts[0] /= cumsums[0]
+    elif proportion:
+        cumsums = np.cumsum(np.ones(cdx.shape))[idx]
+        tCnts[1:] /= cumsums[1:] - cumsums[0:-1]
+        tCnts[0] /= cumsums[0]
     return (cnts, tCnts, cdx[idx]) if makeIds else (cnts, tCnts)
 
 def magicCumsum(cdx,values,makeIds=False):
@@ -303,7 +313,7 @@ def magicCumsum(cdx,values,makeIds=False):
     else:
         return cnts
 
-def plotRatioEMu(taggedPmtEvts, primaries):
+def plotRatioEMu(taggedPmtEvts, primaries, plotProfiles=False):
     """
 	Plots the ratio between muons and electrons.
     Figure 1 shows electron only events over muon events.
@@ -315,6 +325,8 @@ def plotRatioEMu(taggedPmtEvts, primaries):
         list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
     primaries : structured array
         list of primary particles (see `TYPE_PRIMARIES`)
+    plotProfiles : bool, optional
+        if profile plots should be used (instead of scatter plots)
 
     Returns
     -------
@@ -332,16 +344,24 @@ def plotRatioEMu(taggedPmtEvts, primaries):
     #plot into protons/gammas
     plt.figure(1)
     plt.title("Electron muon ratio")
-    plt.scatter(muCnt[selP],eCnt[selP],label="Protons",marker=".")
-    plt.scatter(muCnt[selG],eCnt[selG],label="Gammas",marker="^")
+    if plotProfiles:
+        plt.errorbar(*profilePoints(muCnt[selP],eCnt[selP]),label="Protons")
+        plt.errorbar(*profilePoints(muCnt[selG],eCnt[selG]),label="Gammas")
+    else:
+        plt.scatter(muCnt[selP],eCnt[selP],label="Protons",marker=".")
+        plt.scatter(muCnt[selG],eCnt[selG],label="Gammas",marker="^")
     plt.xlabel("Muon events")
     plt.ylabel("Electron only events")
     plt.legend()
     # plot muon electron ratio
     plt.figure(2)
     plt.title("Electron muon ratio")
-    plt.scatter(primaries["showerEnergy"][ids][selP]/1000,muCnt[selP]/eCnt[selP],label="Protons",marker=".")
-    plt.scatter(primaries["showerEnergy"][ids][selG]/1000,muCnt[selG]/eCnt[selG],label="Gammas",marker="^")
+    if plotProfiles:
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selP]/1000,muCnt[selP]/eCnt[selP]),label="Protons")
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG]/1000,muCnt[selG]/eCnt[selG]),label="Gammas")
+    else:
+        plt.scatter(primaries["showerEnergy"][ids][selP]/1000,muCnt[selP]/eCnt[selP],label="Protons",marker=".")
+        plt.scatter(primaries["showerEnergy"][ids][selG]/1000,muCnt[selG]/eCnt[selG],label="Gammas",marker="^")
     plt.xlabel("Energy/TeV")
     plt.ylabel("$N_\mu/N_e$")
     plt.legend()
@@ -384,6 +404,7 @@ def plotSeparationCuts(labels, cntsP, cntsG, sep=None, plot=True):
             sepP[i] = (cp > sep[i]).sum()
         sepG /= cg.shape[0]
         sepP /= cp.shape[0]
+        # signal to background ratio
         sbr[j,:] = (1-sepG)/(1-sepP+0.000000001)
         # plot
         if plot:
@@ -457,10 +478,12 @@ def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=Tru
     # plot
     if plotProfiles:
         plt.figure(4)
-        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG], tCnts[selG]), label="gammas")
         plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selP], tCnts[selP]), label="protons")
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG], tCnts[selG]), label="gammas")
+        plt.title("Muons per shower")
         plt.xlabel("Energy")
         plt.ylabel("Muons")
+        plt.legend()
 
     # energy dependent cuts
     if plotEdst:

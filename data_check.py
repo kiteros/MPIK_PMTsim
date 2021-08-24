@@ -5,7 +5,7 @@ from shower_analysis import makeTag
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
-makePlots = False
+makePlots = True
 if makePlots:
     plt.figure(1)
     plt.scatter(east, north, c="grey")
@@ -36,6 +36,7 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
     if makePlots:
         cm = plt.cm.get_cmap("YlOrRd")
         plt.figure(1)
+        plt.scatter(east, north, c="grey")
         plt.scatter(east[(pmtIdP/2).astype(int)], north[(pmtIdP/2).astype(int)], vmin=cntPL.min(), vmax=cntPL.max(), c=cntPL, cmap=cm)
         plt.scatter(ex,ey,marker="x")
         plt.gca().add_patch(plt.Circle((ex,ey),20*100,fill=False))
@@ -76,6 +77,8 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
         plt.figure(3)
         plt.bar(pTypes, pCnts)
         plt.xticks(*parTicks)
+        plt.title("PE sources")
+        plt.ylabel("number of PEs")
     # carry over
     histAll += hist
     histULAll += histUL
@@ -83,6 +86,7 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
     taggedPmtEvts.append((cdx*np.ones(pmtIdG[sel].shape), pmtIdG[sel], upper[sel], lower[sel], tagsUpper[sel], tagsLower[sel]))
     cdx += 1
     #if cdx > 5: break
+    plt.show()
     #break
 
 print(cdx)

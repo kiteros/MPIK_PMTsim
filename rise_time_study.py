@@ -30,7 +30,7 @@ if __name__ == "__main__":
     eCnt, muCnt = plotRatioEMu(taggedPmtEvts,primaries)
 
     # settings
-    edst = True
+    edst = False
     if edst:
         plotEdst = True
         cuts = np.array([2])
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     # 2D histogram
     hist, xedges, yedges = np.histogram2d(diffUpper,diffLower,bins=(np.geomspace(0.01,500,101),np.geomspace(0.01,500,101)))
-    if plotHists: plotLogHist2d(xedges,yedges,hist,xlabel="upper 10-90 time/ns",ylabel="lower 10-90 time/ns")
+    if plotHists: plotLogHist2d(xedges,yedges,hist,title="Rise time histogram",xlabel="upper 10-90 time/ns",ylabel="lower 10-90 time/ns")
 
     # electron/muon histograms
     *_, muAny, histEOnly,histMuAny,histLR = makeHistograms(xedges,yedges,taggedPmtEvts,diffUpper,diffLower)

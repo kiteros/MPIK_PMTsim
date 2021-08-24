@@ -10,8 +10,8 @@ from sklearn.metrics import roc_curve
 from keras.callbacks import EarlyStopping
 
 # setup net
-trainModel = True
-filename = "models/mu_tag_ML_at6uwf"
+trainModel = False
+filename = "models/mu_tag_ML_at6uw"
 if trainModel:
     inputs = keras.Input(shape=(6,))
     x = layers.Dense(6, activation="relu")(inputs)
@@ -90,7 +90,7 @@ else:
     plotEdst = False
     cuts = np.linspace(0,1,50)
     sep = np.logspace(-10,0,200) #np.linspace(0,500,500)
-    eBinCnt = 4
+    eBinCnt = 20
 plotHists = False
 
 # tag showers

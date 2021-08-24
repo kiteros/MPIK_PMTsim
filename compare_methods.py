@@ -13,8 +13,7 @@ mtSum = SumTagger([mtRise, mtLR])
 # load data
 gammas = "data/gammabbww/"
 protons = "data/protonbbww/"
-taggedPmtEvts = np.load(protons+"taggedPmtEvts2.npy")
-taggedPmtEvts = taggedPmtEvts[taggedPmtEvts["distance"] > 20*100]
+taggedPmtEvts, _ = loadData([protons,gammas],20)
 _, muAny = getEMuTags(taggedPmtEvts)
 
 # plot roc curves
