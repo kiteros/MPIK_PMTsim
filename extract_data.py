@@ -52,8 +52,8 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         n[:-1] = indices[1:]-indices[:-1]
         n[-1] = spids.size-indices[-1] #TODO is this the same as pmtCnts?
         first = pets[indices]
-        per10 = pets[(n*0.1+indices).astype(int)]
-        per90 = pets[(n*0.9+indices).astype(int)]
+        percentiles = np.array([0.1,0.2,0.5,0.9])
+        perX = [pets[(n*p+indices).astype(int)] for p in percentiles]
         # bring to pmtIdG shape
         uspids = spids[indices]
         #TODO good idea?
@@ -61,14 +61,11 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         upperFirst[(uspids[uspids%2==0]/2).astype(int)] = first[uspids%2==0]
         lowerFirst = np.zeros(pmtIdG.shape)
         lowerFirst[(uspids[uspids%2==1]/2).astype(int)] = first[uspids%2==1]
-        upperPer10 = np.zeros(pmtIdG.shape)
-        upperPer10[(uspids[uspids%2==0]/2).astype(int)] = per10[uspids%2==0]
-        lowerPer10 = np.zeros(pmtIdG.shape)
-        lowerPer10[(uspids[uspids%2==1]/2).astype(int)] = per10[uspids%2==1]
-        upperPer90 = np.zeros(pmtIdG.shape)
-        upperPer90[(uspids[uspids%2==0]/2).astype(int)] = per90[uspids%2==0]
-        lowerPer90 = np.zeros(pmtIdG.shape)
-        lowerPer90[(uspids[uspids%2==1]/2).astype(int)] = per90[uspids%2==1]
+        upperPerX = np.zeros((percentiles.shape[0],pmtIdG.shape[0]))
+        lowerPerX = np.zeros((percentiles.shape[0],pmtIdG.shape[0]))
+        for j in np.arange(percentiles.size):
+            upperPerX[j,(uspids[uspids%2==0]/2).astype(int)] = perX[j][uspids%2==0]
+            lowerPerX[j,(uspids[uspids%2==1]/2).astype(int)] = perX[j][uspids%2==1]
         # pass non empty
         sel = np.logical_or(upper > 0,lower > 0)
         app = np.empty(sel.sum(), dtype=TYPE_TAGGED_PMT_EVTS)
@@ -81,22 +78,21 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         app["distance"] = dist[sel]
         app["firstUpper"] = upperFirst[sel]
         app["firstLower"] = lowerFirst[sel]
-        app["per10Upper"] = upperPer10[sel]
-        app["per10Lower"] = lowerPer10[sel]
-        app["per90Upper"] = upperPer90[sel]
-        app["per90Lower"] = lowerPer90[sel]
+        for p, j in zip(percentiles,np.arange(percentiles.size)):
+            app["per{:0.0f}Upper".format(p*100)] = upperPerX[j][sel]
+            app["per{:0.0f}Lower".format(p*100)] = lowerPerX[j][sel]
         taggedPmtEvts.append(app)#'''
         # shower info
         primaries.append(np.array([(i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i])],dtype=TYPE_PRIMARIES))
     #break
 
 # save tagged events
-saveTaggedEvts = False
+saveTaggedEvts = True
 if saveTaggedEvts:
     data = np.concatenate(taggedPmtEvts,axis=-1)
     np.save(path+"taggedPmtEvts2.npy",data)
 # save primaries
-savePrimaries = False
+savePrimaries = True
 if savePrimaries:
     data = np.concatenate(primaries,axis=-1)
     np.save(path+"primaries.npy",data)

@@ -2,7 +2,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 TYPE_TAGGED_PMT_EVTS = [("showerID","i4"),("pmtIdG","i4"),("upper","i4"),("lower","i4"),("tagsUpper","int8"),("tagsLower","int8"),("distance","f4"),
-    ("firstUpper","f4"),("firstLower","f4"),("per10Upper","f4"),("per10Lower","f4"),("per90Upper","f4"),("per90Lower","f4")]
+    ("firstUpper","f4"),("firstLower","f4"),("per10Upper","f4"),("per10Lower","f4"),("per20Upper","f4"),("per20Lower","f4"),("per50Upper","f4"),("per50Lower","f4"),
+    ("per90Upper","f4"),("per90Lower","f4")]
 """
 Data type of `taggedPmtEvents` as used in all functions in this file.
 """
