@@ -331,14 +331,14 @@ if __name__ == "__main__":
 	esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt")
 	# get PE times
 	events = uproot.lazy("data/DAT000001.root:XCDF")
-	for pmtIds, peTimes in zip(events["HAWCSim.PE.PMTID"], events["HAWCSim.PE.Time"]):
+	for pmtIds, peTimes, fTime in zip(events["HAWCSim.PE.PMTID"], events["HAWCSim.PE.Time"], events["HAWCSim.Evt.firstTime"]):
 		# plot all
-		peTimes = peTimes.to_numpy()
+		peTimes = peTimes.to_numpy()-fTime
 		pmtIds = pmtIds.to_numpy()
 		plt.figure(1)
 		plt.scatter(peTimes, pmtIds, c="grey")
 		# pick a few
-		pmts = np.random.choice(pmtIds, 5)
+		pmts = np.random.choice(np.unique(pmtIds), 3)
 		for pmt in pmts:
 			pets = peTimes[pmtIds == pmt]
 			plt.figure(1)
@@ -347,6 +347,8 @@ if __name__ == "__main__":
 			plt.figure(2)
 			plt.scatter(pets,np.zeros(pets.shape))
 			plt.plot(times+esim.plotOffset, samples)
+			plt.xlabel("time/ns")
+			plt.ylabel("signal/LSB")
 		break
 	# simulate
 	#esim.simulateAll(peTimes)
