@@ -41,7 +41,7 @@ if __name__ == "__main__":
         cuts = np.linspace(0,10,50)
         sep = np.logspace(-10,0,200) #np.linspace(0,100,100)
         eBinCnt = 20
-    plotHists = False
+    plotHists = True
 
     # histogram
     if plotHists:
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     plt.legend()
 
     # analyse wrt energy
-    energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
+    #energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
 
     # make muon tagger
     mt.save("models/mu_tag_LR_rise")

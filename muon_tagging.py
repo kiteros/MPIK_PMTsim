@@ -116,3 +116,15 @@ class SumTagger(MuonTagger):
     def muonScore(self, taggedPmtEvents):
         return np.sum([mt.muonScore(taggedPmtEvents) for mt in self.taggers],axis=0)
 
+class ProductTagger(MuonTagger):
+    """
+    This class multiplies the muon scores of two or more `MuonTagger`s.
+    Required columns depend on given taggers. Cannot be saved.
+    """
+
+    def __init__(self, taggers):
+        self.taggers = taggers
+    
+    def muonScore(self, taggedPmtEvents):
+        return np.product([mt.muonScore(taggedPmtEvents) for mt in self.taggers],axis=0)
+

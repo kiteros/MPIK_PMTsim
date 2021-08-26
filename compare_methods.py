@@ -9,6 +9,7 @@ mtLR = MuTagLR().load("models/mu_tag_LR_PEs")
 mtRise = MuTagRise().load("models/mu_tag_LR_rise")
 mtML = MuTagML().load("models/mu_tag_ML_at6uw")
 mtSum = SumTagger([mtRise, mtLR])
+mtProd = ProductTagger([mtRise, mtLR])
 
 # load data
 gammas = "data/gammabbww/"
@@ -21,7 +22,7 @@ plt.figure()
 plt.title("ROC curve")
 plt.xlabel("false muons")
 plt.ylabel("true muons")
-for mt, lbl in zip([mtLR, mtRise, mtML, mtSum],["charge LR", "rise time LR", "charge rise ML", "charge rise LR"]):
+for mt, lbl in zip([mtLR, mtRise, mtML, mtSum, mtProd],["charge LR", "rise time LR", "charge rise ML", "charge+rise LR", "charge*rise LR"]):
     y_pred = mt.muonScore(taggedPmtEvts)
     y_pred = np.nan_to_num(y_pred, nan=float_info.min, neginf=float_info.min, posinf=float_info.max)
     fpr, tpr, cuts = roc_curve(muAny, y_pred)

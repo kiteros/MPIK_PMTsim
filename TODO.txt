@@ -1,7 +1,8 @@
 Next TODOs:
-- box cuts for charges: time inside this area
-- 10-90 time to 10-20 or sth
+x box cuts for charges: time inside this area
+x 10-90 time to 10-20 or sth
 - histograms for particle types in showers
+- ML feature importance
 
 Future:
 - more data (cluster)
