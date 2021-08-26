@@ -167,7 +167,7 @@ def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", yla
     """
     plt.figure()
     plt.title(title)
-    plt.pcolormesh(*np.meshgrid(xedges, yedges), np.log(hist))
+    plt.pcolormesh(*np.meshgrid(xedges, yedges, indexing="ij"), np.log(hist))
     plt.colorbar()
     plt.xscale("log")
     plt.yscale("log")

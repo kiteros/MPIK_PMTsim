@@ -19,7 +19,8 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         pmtIds = batch["HAWCSim.PE.PMTID"][i].to_numpy()
         partIds = batch["HAWCSim.PE.parPType"][i].to_numpy()
         pets = peTimes[i].to_numpy()
-        # skip if empty
+        # skip if empty (this actually happens!)
+        #TODO primaries?
         if pets.size == 0: continue
         # count upper/lower
         pmtIdsU, pmtCnts = np.unique(pmtIds, return_counts=True)
@@ -87,12 +88,12 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
     #break
 
 # save tagged events
-saveTaggedEvts = True
+saveTaggedEvts = False
 if saveTaggedEvts:
     data = np.concatenate(taggedPmtEvts,axis=-1)
     np.save(path+"taggedPmtEvts2.npy",data)
 # save primaries
-savePrimaries = True
+savePrimaries = False
 if savePrimaries:
     data = np.concatenate(primaries,axis=-1)
     np.save(path+"primaries.npy",data)
