@@ -53,11 +53,12 @@ if __name__ == "__main__":
             plt.bar(bins[:-1],hist)
 
     # 2D histogram
-    hist, xedges, yedges = np.histogram2d(diffUpper,diffLower,bins=(np.geomspace(0.01,500,101),np.geomspace(0.01,500,101)))
+    bins = np.geomspace(0.01,500,101)
+    hist, xedges, yedges = np.histogram2d(np.clip(diffUpper,bins[0],bins[-1]),np.clip(diffLower,bins[0],bins[-1]),bins=(bins,bins))
     if plotHists: plotLogHist2d(xedges,yedges,hist,title="Rise time histogram",xlabel="upper 10-90 time/ns",ylabel="lower 10-90 time/ns")
 
     # electron/muon histograms
-    *_, muAny, histEOnly,histMuAny,histLR = makeHistograms(xedges,yedges,taggedPmtEvts,diffUpper,diffLower)
+    *_, muAny, histEOnly,histMuAny,histLR = makeHistograms(xedges,yedges,taggedPmtEvts,np.clip(diffUpper,bins[0],bins[-1]),np.clip(diffLower,bins[0],bins[-1]))
     for title, hist in zip(["Only electrons", "Any muons", "Likelihood ratio"],
             [histEOnly, histMuAny, histLR]):
         if plotHists: plotLogHist2d(xedges, yedges, hist, title, "upper 10-90 time/ns", "lower 10-90 time/ns")

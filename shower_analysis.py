@@ -150,7 +150,7 @@ def getEMuTags(taggedPmtEvts):
     muAny = tags & TAG_MU > 0
     return eOnly, muAny
 
-def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", ylabel="lower cell PEs"):
+def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", ylabel="lower cell PEs",figure=True):
     """
     Plots logarithmic 2D histogram.
 
@@ -164,8 +164,10 @@ def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", yla
         particle tag (bitwise or of TAG_* values)
     ylabel : string
         label of y axis, default is `"lower cell PEs"`
+    figure : bool
+        if True, make a new figure, defautl is True
     """
-    plt.figure()
+    if figure: plt.figure()
     plt.title(title)
     plt.pcolormesh(*np.meshgrid(xedges, yedges, indexing="ij"), np.log(hist))
     plt.colorbar()
