@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from shower_analysis import *
 from matplotlib.patches import Rectangle
+from sklearn.metrics import roc_curve
 
 def plotTimes(mtRT, p, boxcut):
     diffUpper = boxcut["per"+p+"Upper"]-boxcut["per10Upper"]
@@ -59,12 +60,14 @@ plotLogHist2d(mtLR.xedges,mtLR.yedges,histEOnly+histMuAny,"charge histogram")
 plt.contour(*np.meshgrid(mtLR.xedges[:-1],mtLR.yedges[:-1], indexing="ij"), histLR > cut,levels=[0,1],cmap="Reds_r")
 plotTimes(mtRT,p,lrcut)
 #'''
-
+# convert to float32
+mtRT.xedges = mtRT.xedges.astype("float32")
+mtRT.yedges = mtRT.yedges.astype("float32")
 # 4x4 charge grid
-xcgrid = np.zeros(5)
-ycgrid = np.zeros(5)
-xcgrid[1:] = np.geomspace(10,10**4,4)
-ycgrid[1:] = np.geomspace(10,10**4,4)
+xcgrid = np.zeros(5).astype("float32")
+ycgrid = np.zeros(5).astype("float32")
+xcgrid[1:] = np.geomspace(10,10**4,4).astype("float32")
+ycgrid[1:] = np.geomspace(10,10**4,4).astype("float32")
 *_, histEOnly, histMuAny, histLR = makeHistograms(mtLR.xedges,mtLR.yedges,taggedPmtEvts)
 plt.figure(1)
 plotLogHist2d(mtLR.xedges,mtLR.yedges,histEOnly+histMuAny,"charge histogram",figure=False)
@@ -75,29 +78,40 @@ for i in np.arange(0,4):
         plt.gca().add_patch(Rectangle((xcgrid[i],ycgrid[j]),xcgrid[i+1]-xcgrid[i],ycgrid[j+1]-ycgrid[j],linewidth=1,edgecolor='r',facecolor='none'))
         boxcut = taggedPmtEvts[np.logical_and(taggedPmtEvts["upper"] >= xcgrid[i],taggedPmtEvts["upper"] < xcgrid[i+1])]
         boxcut = boxcut[np.logical_and(boxcut["lower"] >= ycgrid[j], boxcut["lower"] < ycgrid[j+1])]
-        diffUpper = boxcut["per"+p+"Upper"]-boxcut["per10Upper"]
-        diffLower = boxcut["per"+p+"Lower"]-boxcut["per10Lower"]
+        diffUpper = np.clip(boxcut["per"+p+"Upper"]-boxcut["per10Upper"],*mtRT.xedges[[0,-1]])
+        diffLower = np.clip(boxcut["per"+p+"Lower"]-boxcut["per10Lower"],*mtRT.yedges[[0,-1]])
         *_, histEOnly, histMuAny, histLR = makeHistograms(mtRT.xedges,mtRT.yedges,boxcut,diffUpper,diffLower)
         rtHists[i,j,:,:] = histLR
         '''
         plt.figure(2)
         if not np.any(np.isfinite(histLR)): continue
         plt.subplot(4,4,12-4*j+i+1)
-        plotLogHist2d(mtRT.xedges,mtRT.yedges,histEOnly+histMuAny,"Time histogram","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns",False)
+        #plotLogHist2d(mtRT.xedges,mtRT.yedges,histEOnly+histMuAny,"Time histogram","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns",False)
+        #plotLogHist2d(mtRT.xedges,mtRT.yedges,histEOnly,"Electron only events","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns",False)
+        plotLogHist2d(mtRT.xedges,mtRT.yedges,histMuAny,"Muon events","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns",False)
         #plotLogHist2d(mtRT.xedges,mtRT.yedges,np.nan_to_num(histLR+1,posinf=np.max(histLR[np.isfinite(histLR)])),"Likelihood ratio ({:n}|{:n})".format(i,j),"upper time 10-"+p+"/ns","lower time 10-"+p+"/ns",False)
         #'''
 #plt.tight_layout()
 
-
+#'''
 diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
 diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
 # digitize charge and time
-#TODO fix
 uppIdxC = np.digitize(np.clip(taggedPmtEvts["upper"],*xcgrid[[0,-1]]), xcgrid)-1
+uppIdxC[uppIdxC >= xcgrid.shape[0]-1] = xcgrid.shape[0]-2
 lowIdxC = np.digitize(np.clip(taggedPmtEvts["lower"],*ycgrid[[0,-1]]), ycgrid)-1
+lowIdxC[lowIdxC >= ycgrid.shape[0]-1] = ycgrid.shape[0]-2
 uppIdxT = np.digitize(np.clip(diffUpper,*mtRT.xedges[[0,-1]]), mtRT.xedges)-1
+uppIdxT[uppIdxT >= mtRT.xedges.shape[0]-1] = mtRT.xedges.shape[0]-2
 lowIdxT = np.digitize(np.clip(diffLower,*mtRT.yedges[[0,-1]]), mtRT.yedges)-1
+lowIdxT[lowIdxT >= mtRT.yedges.shape[0]-1] = mtRT.yedges.shape[0]-2
 scoreCT = rtHists[uppIdxC,lowIdxC,uppIdxT,lowIdxT]
-sctt = scoreCT[~np.isnan(scoreCT)]
+# plot ROC curve
+plt.figure()
+_, muAny = getEMuTags(taggedPmtEvts)
+y_pred = np.nan_to_num(scoreCT, nan=float_info.min, neginf=float_info.min, posinf=float_info.max)
+fpr, tpr, cuts = roc_curve(muAny, y_pred)
+plt.plot(fpr,tpr)
+#'''
 
 plt.show()
