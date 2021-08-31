@@ -27,7 +27,7 @@ if __name__ == "__main__":
     eCnt, muCnt = plotRatioEMu(taggedPmtEvts,primaries,True)
 
     # select what to do
-    edst = True
+    edst = False
     if edst:
         plotEdst = True
         cuts = np.array([35.6])#[6.5,7.3,9.8])#[35.6]#[7.6]
@@ -35,13 +35,13 @@ if __name__ == "__main__":
         eBinCnt = 4
     else:
         plotEdst = False
-        cuts = np.linspace(5,40,50)
+        cuts = np.linspace(0,40,50)
         sep = np.logspace(-10,0,200) #np.linspace(0,200,200)
         eBinCnt = 20
 
 
     # tag events
-    cnts, tCnts, ids = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True, ratio=False, makeIds=True, proportion=False)
+    cnts, tCnts, ids = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True, ratio=False, makeIds=True, proportion=True)
     selP = primaries["showerType"][ids] == ID_PROTON
     selG = primaries["showerType"][ids] == ID_PHOTON
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     plt.legend()
 
     # analyse wrt energy
-    #energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
+    energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
 
     # save muon tagger
     mt.save("models/mu_tag_LR_PEs")

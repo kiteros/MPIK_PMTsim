@@ -82,7 +82,7 @@ def loadData(paths, exclusion=0):
 
     return taggedPmtEvtsFull,primaries
 
-def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
+def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower", clip=True):
     """
     Makes histograms from tagged PMT events.
 
@@ -98,6 +98,8 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
         upper events, default is `"upper"`
     lower : string or array_like
         lower events, default is `"lower"`
+    clip : bool, optional
+        restrict values of upper and lower to the range in xedges and yedges, default is True
     
     Returns
     -------
@@ -118,6 +120,10 @@ def makeHistograms(xedges, yedges, taggedPmtEvts, upper="upper", lower="lower"):
     if isinstance(upper,str): upper = taggedPmtEvts[upper]
     if isinstance(lower,str): lower = taggedPmtEvts[lower]
     eOnly, muAny = getEMuTags(taggedPmtEvts)
+    # restrict to valid range
+    if clip:
+        upper = np.clip(upper,xedges[0],xedges[-1])
+        lower = np.clip(lower,yedges[0],yedges[-1])
     # histogram
     histEOnly, *_ = np.histogram2d(upper[eOnly],lower[eOnly], bins=[xedges,yedges])
     histMuAny, *_ = np.histogram2d(upper[muAny],lower[muAny], bins=[xedges,yedges])
@@ -198,10 +204,16 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     ndarray
         muon scores
     """
-    uppIdx = np.digitize(upper, xedges)
-    lowIdx = np.digitize(lower, yedges)
+    # ensure same types
+    xedges = xedges.astype(upper.dtype)
+    yedges = yedges.astype(lower.dtype)
+    # digitize in range
+    uppIdx = np.digitize(np.clip(upper, *xedges[[0,-1]]), xedges)-1
+    lowIdx = np.digitize(np.clip(lower, *yedges[[0,-1]]), yedges)-1
+    # remove overflow bin
     uppIdx[uppIdx >= xedges.shape[0]-1] = xedges.shape[0]-2
     lowIdx[lowIdx >= yedges.shape[0]-1] = yedges.shape[0]-2
+    # return muon scores
     muLR = histLR[uppIdx, lowIdx]
     return muLR
 
