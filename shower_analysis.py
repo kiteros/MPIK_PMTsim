@@ -168,6 +168,8 @@ def plotLogHist2d(xedges, yedges, hist, title=None, xlabel="upper cell PEs", yla
         histogram yedges
     hist : array_like
         particle tag (bitwise or of TAG_* values)
+    xlabel : string
+        label of x axis, default is `"upper cell PEs"`
     ylabel : string
         label of y axis, default is `"lower cell PEs"`
     figure : bool
@@ -216,6 +218,49 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     # return muon scores
     muLR = histLR[uppIdx, lowIdx]
     return muLR
+
+def muonScoreCT(taggedPmtEvts, xtedges, ytedges, p, xcgrid, ycgrid, rtHists):
+    """
+    Calculates the lieklihood ratio muon score for rise times considering correlations with charge.
+
+    Parameters
+    ----------
+    taggedPmtEvts : structured array
+        list of PMT events with tags (see `TYPE_TAGGED_PMT_EVTS`)
+    xtedges : array_like
+        histogram xedges for time
+    ytedges : array_like
+        histogram yedges for time
+    p : string
+        percentile to evaluate (lower is always 10)
+    xcgrid : array_like
+        histogram xedges for charge
+    ycgrid : array_like
+        histogram yedges for charge
+    rtHist : array_like
+        likelihood ratios of muon events (4D array)
+        axis order: xcgrid, ycgrid, xtedges, ytedges
+    
+    Returns
+    -------
+    ndarray
+        muon scores
+    """
+    # extract data
+    diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
+    diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
+    # digitize charge and time
+    uppIdxC = np.digitize(np.clip(taggedPmtEvts["upper"],*xcgrid[[0,-1]]), xcgrid)-1
+    uppIdxC[uppIdxC >= xcgrid.shape[0]-1] = xcgrid.shape[0]-2
+    lowIdxC = np.digitize(np.clip(taggedPmtEvts["lower"],*ycgrid[[0,-1]]), ycgrid)-1
+    lowIdxC[lowIdxC >= ycgrid.shape[0]-1] = ycgrid.shape[0]-2
+    uppIdxT = np.digitize(np.clip(diffUpper,*xtedges[[0,-1]]), xtedges)-1
+    uppIdxT[uppIdxT >= xtedges.shape[0]-1] = xtedges.shape[0]-2
+    lowIdxT = np.digitize(np.clip(diffLower,*ytedges[[0,-1]]), ytedges)-1
+    lowIdxT[lowIdxT >= ytedges.shape[0]-1] = ytedges.shape[0]-2
+    # calculate score
+    scoreCT = rtHists[uppIdxC,lowIdxC,uppIdxT,lowIdxT]
+    return scoreCT
 
 def tagShowers(muonTagger, taggedPmtEvts, cut=1, truth=False, ratio=False, makeIds=False, proportion=False):
     """

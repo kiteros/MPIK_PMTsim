@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import norm, rv_histogram, randint
 from scipy.signal import resample
-import uproot
 
 class ElectronicsSimulation:
 	"""
@@ -292,16 +289,16 @@ class ElectronicsSimulation:
 			times in ns and simulated ADC output in LSB
 		"""
 		# simulate pmt
-		times, signal = esim.simulatePMTSignal(peTimes)
+		times, signal = self.simulatePMTSignal(peTimes)
 		# convolve with pulse shape
-		signal = esim.simulateElectronics(signal)
+		signal = self.simulateElectronics(signal)
 		# make samples
-		stimes, samples = esim.simulateADC(times, signal)
+		stimes, samples = self.simulateADC(times, signal)
 		# debug plots
 		if self.debugPlots:
 			plt.figure()
 			plt.scatter(peTimes,np.zeros(peTimes.shape))
-			plt.plot(times+esim.plotOffset, signal)
+			plt.plot(times+self.plotOffset, signal)
 			plt.xlabel("t/ns")
 			plt.ylabel("A/au")
 			plt.title("PMT signal")
@@ -313,52 +310,5 @@ class ElectronicsSimulation:
 		# return
 		return stimes, samples
 	
-	def getPETimes(self, source = None):	
-		#TODO remove
-		if source == None:
-			peTimes = self.simulatePETimes()
-		elif type(source) is str:
-			peTimes = np.loadtxt(source, unpack=True)
-		return peTimes
-	
 # end of class
-
-
-
-# --- start ---
-if __name__ == "__main__":
-	# init class
-	esim = ElectronicsSimulation(ampSpec="data/bb3_1700v_spe.txt", timeSpec="data/bb3_1700v_timing.txt", pulseShape="data/bb3_1700v_pulse_shape.txt")
-	# get PE times
-	events = uproot.lazy("data/DAT000001.root:XCDF")
-	for pmtIds, peTimes, fTime in zip(events["HAWCSim.PE.PMTID"], events["HAWCSim.PE.Time"], events["HAWCSim.Evt.firstTime"]):
-		# plot all
-		peTimes = peTimes.to_numpy()-fTime
-		pmtIds = pmtIds.to_numpy()
-		plt.figure(1)
-		plt.scatter(peTimes, pmtIds, c="grey")
-		# pick a few
-		pmts = np.random.choice(np.unique(pmtIds), 3)
-		for pmt in pmts:
-			pets = peTimes[pmtIds == pmt]
-			plt.figure(1)
-			plt.scatter(pets,pmt*np.ones(pets.shape))
-			times, samples = esim.simulateAll(pets)
-			plt.figure(2)
-			plt.scatter(pets,np.zeros(pets.shape))
-			plt.plot(times+esim.plotOffset, samples)
-			plt.xlabel("time/ns")
-			plt.ylabel("signal/LSB")
-		break
-	# simulate
-	#esim.simulateAll(peTimes)
-
-	plt.show()
-
-
-
-
-
-
-
 

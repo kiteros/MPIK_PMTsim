@@ -6,31 +6,14 @@ from shower_analysis import *
 from matplotlib.patches import Rectangle
 from sklearn.metrics import roc_curve
 
-def plotTimes(mtRT, p, boxcut):
-    diffUpper = boxcut["per"+p+"Upper"]-boxcut["per10Upper"]
-    diffLower = boxcut["per"+p+"Lower"]-boxcut["per10Lower"]
-    *_, histEOnly, histMuAny, histLR = makeHistograms(mtRT.xedges,mtRT.yedges,boxcut,diffUpper,diffLower)
+def plotTimes(mtRT, p, taggedPmtEvts):
+    diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
+    diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
+    *_, histEOnly, histMuAny, histLR = makeHistograms(mtRT.xedges,mtRT.yedges,taggedPmtEvts,diffUpper,diffLower)
     plotLogHist2d(mtRT.xedges,mtRT.yedges,histEOnly,"Electron only (box)","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns")
     plotLogHist2d(mtRT.xedges,mtRT.yedges,histMuAny,"Muons (box)","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns")
     plotLogHist2d(mtRT.xedges,mtRT.yedges,np.nan_to_num(histLR+1,posinf=np.max(histLR[np.isfinite(histLR)])),"Likelihood ratio (box)","upper time 10-"+p+"/ns","lower time 10-"+p+"/ns")
     #np.nan_to_num(histLR+1,posinf=np.max(histLR[np.isfinite(histLR)]))
-
-def muonScoreCT(taggedPmtEvts, xtedges, ytedges, p, xcgrid, ycgrid, rtHists):
-    # extract data
-    diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
-    diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
-    # digitize charge and time
-    uppIdxC = np.digitize(np.clip(taggedPmtEvts["upper"],*xcgrid[[0,-1]]), xcgrid)-1
-    uppIdxC[uppIdxC >= xcgrid.shape[0]-1] = xcgrid.shape[0]-2
-    lowIdxC = np.digitize(np.clip(taggedPmtEvts["lower"],*ycgrid[[0,-1]]), ycgrid)-1
-    lowIdxC[lowIdxC >= ycgrid.shape[0]-1] = ycgrid.shape[0]-2
-    uppIdxT = np.digitize(np.clip(diffUpper,*xtedges[[0,-1]]), xtedges)-1
-    uppIdxT[uppIdxT >= xtedges.shape[0]-1] = xtedges.shape[0]-2
-    lowIdxT = np.digitize(np.clip(diffLower,*ytedges[[0,-1]]), ytedges)-1
-    lowIdxT[lowIdxT >= ytedges.shape[0]-1] = ytedges.shape[0]-2
-    # calculate score
-    scoreCT = rtHists[uppIdxC,lowIdxC,uppIdxT,lowIdxT]
-    return scoreCT
 
 # --- start ---
 if __name__ == "__main__":

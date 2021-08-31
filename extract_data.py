@@ -11,7 +11,6 @@ parser.add_argument("-p", "--primaries", action="store_true", help="create prima
 parser.add_argument("-g", "--geometry", default="data/swgo_reference_survey.txt", help="name of geometry file")
 parser.add_argument("path", default="/", help="path of the .root files", nargs="?")
 args = parser.parse_args()
-print(args)
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt(args.geometry, unpack=True)

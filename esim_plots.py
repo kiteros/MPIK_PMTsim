@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from main import ElectronicsSimulation
+from electronics_simulation import ElectronicsSimulation
 
 ampSpec = np.loadtxt("data/bb3_1700v_spe.txt",unpack=True)
 timeSpec = "data/bb3_1700v_timing.txt"

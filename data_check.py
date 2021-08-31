@@ -3,6 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from shower_analysis import makeTag
 
+raise DeprecationWarning("Outdated, use extract_data instead!")
+
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
 makePlots = True

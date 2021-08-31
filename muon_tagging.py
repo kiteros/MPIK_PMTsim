@@ -1,6 +1,5 @@
 import numpy as np
 from shower_analysis import muonScoreLR
-from tensorflow import keras
 from numpy.lib import recfunctions as rfn
 from pathlib import Path
 from time_plots import muonScoreCT
@@ -86,6 +85,7 @@ class MuTagML(MuonTagger):
         self.model = model
     
     def load(self, filename):
+        from tensorflow import keras
         self.model = keras.models.load_model("models/mu_tag_ML")
         return self
     
