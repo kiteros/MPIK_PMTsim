@@ -2,26 +2,37 @@ import uproot
 import awkward as ak
 import numpy as np
 from shower_analysis import TAG_E, TAG_MU, TAG_MESON, TAG_OTHER, TYPE_PRIMARIES, TYPE_TAGGED_PMT_EVTS
+import argparse
+
+# parse command line arguments
+parser = argparse.ArgumentParser(description="Extracts PMT event data from shower simulations.")
+parser.add_argument("-e", "--events", action="store_true", help="create PMT event list")
+parser.add_argument("-p", "--primaries", action="store_true", help="create primary particle list")
+parser.add_argument("-g", "--geometry", default="data/swgo_reference_survey.txt", help="name of geometry file")
+parser.add_argument("path", default="/", help="path of the .root files", nargs="?")
+args = parser.parse_args()
+print(args)
 
 # detector geometry
-pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
+pmtIdG, east, north = np.loadtxt(args.geometry, unpack=True)
 
+# batch process .root files
 taggedPmtEvts = []
 primaries = []
-path = "data/protonbbww/"
+path = args.path
 for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         filter_name=["HAWCSim.Evt.Num","HAWCSim.PE.Time","HAWCSim.Evt.firstTime","HAWCSim.PE.PMTID","HAWCSim.Evt.X","HAWCSim.Evt.Y","HAWCSim.PE.parPType"
         ,"HAWCSim.Evt.pType","HAWCSim.Evt.Energy"]):
     peTimes = batch["HAWCSim.PE.Time"]-batch["HAWCSim.Evt.firstTime"]
     for i in np.arange(ak.num(peTimes,0)):
-        #'''
         # make numpy arrays
         pmtIds = batch["HAWCSim.PE.PMTID"][i].to_numpy()
         partIds = batch["HAWCSim.PE.parPType"][i].to_numpy()
         pets = peTimes[i].to_numpy()
+        # shower info
+        primaries.append(np.array([(i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i])],dtype=TYPE_PRIMARIES))
         # skip if empty (this actually happens!)
-        #TODO primaries?
-        if pets.size == 0: continue
+        if pets.size == 0 or ~args.events: continue
         # count upper/lower
         pmtIdsU, pmtCnts = np.unique(pmtIds, return_counts=True)
         upper = np.zeros(pmtIdG.shape)
@@ -82,18 +93,14 @@ for batch,report in uproot.iterate([path+"*.root:XCDF"],report=True,
         for p, j in zip(percentiles,np.arange(percentiles.size)):
             app["per{:0.0f}Upper".format(p*100)] = upperPerX[j][sel]
             app["per{:0.0f}Lower".format(p*100)] = lowerPerX[j][sel]
-        taggedPmtEvts.append(app)#'''
-        # shower info
-        primaries.append(np.array([(i+report.start,batch["HAWCSim.Evt.pType"][i],batch["HAWCSim.Evt.Energy"][i])],dtype=TYPE_PRIMARIES))
+        taggedPmtEvts.append(app)
     #break
 
 # save tagged events
-saveTaggedEvts = False
-if saveTaggedEvts:
+if args.events:
     data = np.concatenate(taggedPmtEvts,axis=-1)
     np.save(path+"taggedPmtEvts2.npy",data)
 # save primaries
-savePrimaries = False
-if savePrimaries:
+if args.primaries:
     data = np.concatenate(primaries,axis=-1)
     np.save(path+"primaries.npy",data)
