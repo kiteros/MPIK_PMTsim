@@ -11,9 +11,9 @@ from keras.callbacks import EarlyStopping
 
 # setup net
 trainModel = False
-filename = "models/mu_tag_ML_at6uw"
+filename = "models/mu_tag_ML_at4uws"
 if trainModel:
-    inputs = keras.Input(shape=(6,))
+    inputs = keras.Input(shape=(4,))
     x = layers.Dense(6, activation="relu")(inputs)
     outputs = layers.Dense(1, activation="sigmoid")(x) #TODO add activation (tanh is bad)
     model = keras.Model(inputs=inputs, outputs=outputs, name="mu_tag_ML")
@@ -26,17 +26,15 @@ else:
 # load data
 paths = ["data/protonbbww/","data/gammabbww/"]
 taggedPmtEvts, primaries = loadData(paths,20)
-inputs = model.get_layer("input_1").get_config()["batch_input_shape"][1]
-if inputs == 8:
-    data = taggedPmtEvts[["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]]
-    data = rfn.structured_to_unstructured(data, dtype=float)
-elif inputs == 6:
-    data = taggedPmtEvts[["upper","lower","per10Upper","per10Lower","per90Upper","per90Lower"]]
-    data = rfn.structured_to_unstructured(data, dtype=float)
-    for i in np.arange(2,6):
-        data[:,i] -= taggedPmtEvts["firstUpper"]
-else:
-    raise NotImplementedError("Only input shapes 6 and 8 supported.")
+#fields = ["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]
+fields = ["upper","lower","per50Upper","per50Lower"]
+config = {"type":"MuTagML","fields":fields,"subtract":["per10Upper","per10Lower"],"subtract_from":["per50Upper","per50Lower"]}
+data = taggedPmtEvts[fields]
+if "subtract" in config:
+    for f,s in zip(config["subtract_from"],config["subtract"]):
+        data[f] -= taggedPmtEvts[s]
+data = rfn.structured_to_unstructured(data, dtype=float)
+
 _, muAny = getEMuTags(taggedPmtEvts)
 
 # prepare training data
@@ -55,7 +53,7 @@ print(y_train.sum()/y_train.size)
 # train model
 if trainModel:
     history = model.fit(x_train, y_train, batch_size=64, epochs=20, validation_split=0.2, callbacks=[EarlyStopping(patience=3,restore_best_weights=True)])
-    model.save(filename)
+    MuTagML(model,config).save(filename)
 
 # test model
 '''
@@ -76,7 +74,7 @@ plt.scatter(fpr[::100],tpr[::100],c=cuts[::100])
 plt.colorbar()
 
 # energy dependent analysis
-mt = MuTagML(model)
+mt = MuTagML().load(filename)
 #TODO actually do this on the test data and not everything
 
 # settings

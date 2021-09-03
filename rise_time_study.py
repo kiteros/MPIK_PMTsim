@@ -24,7 +24,9 @@ if __name__ == "__main__":
     exclusion = 20
     taggedPmtEvts, primaries = loadData([protons, gammas], exclusion)
 
-    diffUpper, diffLower = getT10_90(taggedPmtEvts)
+    p = "50"
+    diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
+    diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
 
     # plot muon vs electron count
     eCnt, muCnt = plotRatioEMu(taggedPmtEvts,primaries)
@@ -41,7 +43,7 @@ if __name__ == "__main__":
         cuts = np.linspace(0,10,50)
         sep = np.logspace(-10,0,200) #np.linspace(0,100,100)
         eBinCnt = 20
-    plotHists = False
+    plotHists = True
 
     # histogram
     if plotHists:
@@ -55,16 +57,16 @@ if __name__ == "__main__":
     # 2D histogram
     bins = np.geomspace(0.01,500,101)
     hist, xedges, yedges = np.histogram2d(np.clip(diffUpper,bins[0],bins[-1]),np.clip(diffLower,bins[0],bins[-1]),bins=(bins,bins))
-    if plotHists: plotLogHist2d(xedges,yedges,hist,title="Rise time histogram",xlabel="upper 10-90 time/ns",ylabel="lower 10-90 time/ns")
+    if plotHists: plotLogHist2d(xedges,yedges,hist,title="Rise time histogram",xlabel="upper 10-"+p+" time/ns",ylabel="lower 10-"+p+" time/ns")
 
     # electron/muon histograms
     *_, muAny, histEOnly,histMuAny,histLR = makeHistograms(xedges,yedges,taggedPmtEvts,np.clip(diffUpper,bins[0],bins[-1]),np.clip(diffLower,bins[0],bins[-1]),clip=False)
     for title, hist in zip(["Only electrons", "Any muons", "Likelihood ratio"],
             [histEOnly, histMuAny, histLR]):
-        if plotHists: plotLogHist2d(xedges, yedges, hist, title, "upper 10-90 time/ns", "lower 10-90 time/ns")
+        if plotHists: plotLogHist2d(xedges, yedges, hist, title, "upper 10-"+p+" time/ns", "lower 10-"+p+" time/ns")
     
     # make muon tagger
-    mt = MuTagRise(xedges,yedges,histLR)
+    mt = MuTagRise(xedges,yedges,histLR,{"high":p,"low":"10"})
 
     # tag events
     cnts, tCnts, ids = tagShowers(mt, taggedPmtEvts, cut=cuts, truth=True, ratio=True, makeIds=True)
@@ -86,7 +88,7 @@ if __name__ == "__main__":
     plt.legend()
 
     # analyse wrt energy
-    energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
+    #energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
 
     # make muon tagger
     mt.save("models/mu_tag_LR_rise")

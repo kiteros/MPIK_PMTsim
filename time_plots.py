@@ -96,7 +96,7 @@ if __name__ == "__main__":
     #plt.tight_layout()
 
     # create tagger
-    mtCT = MuTagChargeRise(p, mtLR.xedges, mtLR.yedges, mtRT.xedges, mtRT.yedges, xcgrid,ycgrid, mtLR.histLR, rtHists)
+    mtCT = MuTagChargeRise("10", p, mtLR.xedges, mtLR.yedges, mtRT.xedges, mtRT.yedges, xcgrid,ycgrid, mtLR.histLR, rtHists)
     mtCT.save("models/mu_tag_LR_CT")
 
     #'''

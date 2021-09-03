@@ -3,6 +3,7 @@ from shower_analysis import muonScoreLR
 from numpy.lib import recfunctions as rfn
 from pathlib import Path
 from time_plots import muonScoreCT
+import json
 
 
 class MuonTagger:
@@ -45,15 +46,20 @@ class MuTagLR(MuonTagger):
     Required columns for score calculation: upper, lower
     """
 
-    def __init__(self, xedges=None, yedges=None, histLR=None):
+    def __init__(self, xedges=None, yedges=None, histLR=None, config=None):
         self.xedges = xedges
         self.yedges = yedges
         self.histLR = histLR
+        if config==None:
+            config = {"type" : "MuTagLR"}
+        self.config = config
     
     def load(self, filename):
         self.xedges = np.load(filename+"/xedges.npy")
         self.yedges = np.load(filename+"/yedges.npy")
         self.histLR = np.load(filename+"/histLR.npy")
+        with open(filename+"/config.json","r") as f:
+            self.config = json.load(f)
         return self
     
     def save(self, filename):
@@ -61,6 +67,8 @@ class MuTagLR(MuonTagger):
         np.save(filename+"/xedges.npy",self.xedges)
         np.save(filename+"/yedges.npy",self.yedges)
         np.save(filename+"/histLR.npy",self.histLR)
+        with open(filename+"/config.json","w") as f:
+            json.dump(self.config,f)
     
     def muonScore(self, taggedPmtEvents):
         return muonScoreLR(self.xedges, self.yedges, taggedPmtEvents["upper"], taggedPmtEvents["lower"], self.histLR)
@@ -71,9 +79,17 @@ class MuTagRise(MuTagLR):
     Required columns for score calculation: per90Upper, per10Upper, per90Lower, per10Lower
     """
 
+    def __init__(self, xedges=None, yedges=None, histLR=None, config=None, low="10", high="50"):
+        super().__init__(xedges=xedges, yedges=yedges, histLR=histLR, config=config)
+        self.config["type"] = "MuTagRise"
+        if not "low" in self.config:
+            self.config["low"] = low
+        if not "high" in self.config:
+            self.config["high"] = high
+
     def muonScore(self, taggedPmtEvents):
-        return muonScoreLR(self.xedges, self.yedges, taggedPmtEvents["per90Upper"]-taggedPmtEvents["per10Upper"],
-            taggedPmtEvents["per90Lower"]-taggedPmtEvents["per10Lower"], self.histLR)
+        return muonScoreLR(self.xedges, self.yedges, taggedPmtEvents["per"+self.config["high"]+"Upper"]-taggedPmtEvents["per"+self.config["low"]+"Upper"],
+            taggedPmtEvents["per"+self.config["high"]+"Lower"]-taggedPmtEvents["per"+self.config["low"]+"Lower"], self.histLR)
 
 class MuTagML(MuonTagger):
     """
@@ -81,29 +97,29 @@ class MuTagML(MuonTagger):
     Required columns for score calculation: upper, lower, firstUpper, firstLower, per10Upper, per10Lower, per90Upper, per90Lower
     """    
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, config=None):
         self.model = model
+        self.config = config
     
     def load(self, filename):
         from tensorflow import keras
-        self.model = keras.models.load_model("models/mu_tag_ML")
+        self.model = keras.models.load_model(filename)
+        with open(filename+"/config.json","r") as f:
+            self.config = json.load(f)
         return self
     
     def save(self, filename):
         self.model.save(filename)
+        with open(filename+"/config.json","w") as f:
+            json.dump(self.config,f)
     
     def muonScore(self, taggedPmtEvts):
-        inputs = self.model.get_layer("input_1").get_config()["batch_input_shape"][1]
-        if inputs == 8:
-            data = taggedPmtEvts[["upper","lower","firstUpper","firstLower","per10Upper","per10Lower","per90Upper","per90Lower"]]
-            data = rfn.structured_to_unstructured(data, dtype=float)
-        elif inputs == 6:
-            data = taggedPmtEvts[["upper","lower","per10Upper","per10Lower","per90Upper","per90Lower"]]
-            data = rfn.structured_to_unstructured(data, dtype=float)
-            for i in np.arange(2,6):
-                data[:,i] -= taggedPmtEvts["firstUpper"]
-        else:
-            raise NotImplementedError("Only input shapes 6 and 8 supported.")
+        fields = self.config["fields"]
+        data = taggedPmtEvts[fields]
+        if "subtract" in self.config:
+            for f,s in zip(self.config["subtract_from"],self.config["subtract"]):
+                data[f] -= taggedPmtEvts[s]
+        data = rfn.structured_to_unstructured(data, dtype=float)
         return self.model(data).numpy().ravel()
 
 class SumTagger(MuonTagger):
@@ -136,7 +152,7 @@ class MuTagChargeRise(MuonTagger):
     Required columns for score calculation: upper, lower, perXUpper, per10Upper, perXLower, per10Lower (X may vary)
     """
 
-    def __init__(self, p=None, xcedges=None, ycedges=None, xtedges=None, ytedges=None, xcgrid=None, ycgrid=None, histLR=None, rtHists=None):
+    def __init__(self, low=None, high=None, xcedges=None, ycedges=None, xtedges=None, ytedges=None, xcgrid=None, ycgrid=None, histLR=None, rtHists=None):
         self.xtedges = xtedges
         self.ytedges = ytedges
         self.xcedges = xcedges
@@ -145,7 +161,8 @@ class MuTagChargeRise(MuonTagger):
         self.ycgrid = ycgrid
         self.histLR = histLR
         self.rtHists = rtHists
-        self.p = p
+        self.high = high
+        self.low = low
     
     def load(self, filename):
         self.xcedges = np.load(filename+"/xcedges.npy")
@@ -156,7 +173,10 @@ class MuTagChargeRise(MuonTagger):
         self.ycgrid = np.load(filename+"/ycgrid.npy")
         self.histLR = np.load(filename+"/histLR.npy")
         self.rtHists = np.load(filename+"/rtHists.npy")
-        self.p = np.load(filename+"/config.npy")[0]
+        with open(filename+"/config.json","r") as f:
+            config = json.load(f)
+        self.low = config["low"]
+        self.high = config["high"]
         return self
     
     def save(self, filename):
@@ -169,11 +189,12 @@ class MuTagChargeRise(MuonTagger):
         np.save(filename+"/ycgrid.npy",self.ycgrid)
         np.save(filename+"/histLR.npy",self.histLR)
         np.save(filename+"/rtHists.npy",self.rtHists)
-        conf = np.array([self.p])
-        np.save(filename+"/config.npy",conf)
+        conf = {"low":self.low,"high":self.high,"type":"MuTagChargeRise"}
+        with open(filename+"/config.json","w") as f:
+            json.dump(conf,f)
     
     def muonScore(self, taggedPmtEvents):
-        scoreCT = muonScoreCT(taggedPmtEvents, self.xtedges, self.ytedges, self.p, self.xcgrid, self.ycgrid, self.rtHists)
+        scoreCT = muonScoreCT(taggedPmtEvents, self.xtedges, self.ytedges, self.low, self.high, self.xcgrid, self.ycgrid, self.rtHists)
         scoreCT *= muonScoreLR(self.xcedges, self.ycedges, taggedPmtEvents["upper"], taggedPmtEvents["lower"], self.histLR)
         return scoreCT
 

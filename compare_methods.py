@@ -7,7 +7,8 @@ from shower_analysis import *
 # load muon taggers
 mtLR = MuTagLR().load("models/mu_tag_LR_PEs")
 mtRise = MuTagRise().load("models/mu_tag_LR_rise")
-mtML = MuTagML().load("models/mu_tag_ML_at6uw")
+mtML = MuTagML().load("models/mu_tag_ML_at8uws")
+mtML4 = MuTagML().load("models/mu_tag_ML_at4uws")
 mtSum = SumTagger([mtRise, mtLR])
 mtProd = ProductTagger([mtRise, mtLR])
 mtCT = MuTagChargeRise().load("models/mu_tag_LR_CT")
@@ -23,7 +24,8 @@ plt.figure()
 plt.title("ROC curve")
 plt.xlabel("false muons")
 plt.ylabel("true muons")
-for mt, lbl in zip([mtLR, mtRise, mtML, mtCT],["charge LR", "rise time LR", "charge rise ML", "charge time LR"]):
+for mt, lbl in zip([mtLR, mtRise, mtCT, mtML, mtML4],["charge LR", "rise time LR", "charge time LR", "charge rise ML", "charge rise 4 ML"
+    ]):
     y_pred = mt.muonScore(taggedPmtEvts)
     y_pred = np.nan_to_num(y_pred, nan=float_info.min, neginf=float_info.min, posinf=float_info.max)
     fpr, tpr, cuts = roc_curve(muAny, y_pred)

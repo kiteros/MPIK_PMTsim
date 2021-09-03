@@ -219,7 +219,7 @@ def muonScoreLR(xedges, yedges, upper, lower, histLR):
     muLR = histLR[uppIdx, lowIdx]
     return muLR
 
-def muonScoreCT(taggedPmtEvts, xtedges, ytedges, p, xcgrid, ycgrid, rtHists):
+def muonScoreCT(taggedPmtEvts, xtedges, ytedges, low, high, xcgrid, ycgrid, rtHists):
     """
     Calculates the lieklihood ratio muon score for rise times considering correlations with charge.
 
@@ -231,8 +231,10 @@ def muonScoreCT(taggedPmtEvts, xtedges, ytedges, p, xcgrid, ycgrid, rtHists):
         histogram xedges for time
     ytedges : array_like
         histogram yedges for time
-    p : string
-        percentile to evaluate (lower is always 10)
+    low : string
+        lower percentile to evaluate
+    high : string
+        higher percentile to evaluate
     xcgrid : array_like
         histogram xedges for charge
     ycgrid : array_like
@@ -247,8 +249,8 @@ def muonScoreCT(taggedPmtEvts, xtedges, ytedges, p, xcgrid, ycgrid, rtHists):
         muon scores
     """
     # extract data
-    diffUpper = taggedPmtEvts["per"+p+"Upper"]-taggedPmtEvts["per10Upper"]
-    diffLower = taggedPmtEvts["per"+p+"Lower"]-taggedPmtEvts["per10Lower"]
+    diffUpper = taggedPmtEvts["per"+high+"Upper"]-taggedPmtEvts["per"+low+"Upper"]
+    diffLower = taggedPmtEvts["per"+high+"Lower"]-taggedPmtEvts["per"+low+"Lower"]
     # digitize charge and time
     uppIdxC = np.digitize(np.clip(taggedPmtEvts["upper"],*xcgrid[[0,-1]]), xcgrid)-1
     uppIdxC[uppIdxC >= xcgrid.shape[0]-1] = xcgrid.shape[0]-2
@@ -609,7 +611,7 @@ def plotROC(muAny, muScore, cuts):
     plt.title("ROC curve")
     plt.plot(falseMu,trueMu)
     plt.scatter(falseMu,trueMu,c=cuts)
-    plt.colorbar()
+    plt.colorbar(label="muon score")
     plt.xlabel("false muons")
     plt.ylabel("true muons")
 

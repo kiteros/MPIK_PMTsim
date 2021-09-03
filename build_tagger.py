@@ -28,7 +28,7 @@ def makeRiseTimeTagger(taggedPmtEvents, xedges=None, yedges=None, high="50", low
     if xedges==None: xedges = np.geomspace(0.01,500,101)
     if yedges==None: yedges = np.geomspace(0.01,500,101)
     *_, histLR = makeHistograms(xedges,yedges,taggedPmtEvents,diffUpper,diffLower)
-    mt = MuTagRise(xedges,yedges,histLR)
+    mt = MuTagRise(xedges,yedges,histLR,low=low,high=high)
     if name==None:
         name = "models/mu_tag_LR_rise_"+high+"_"+low
     mt.save(name)

@@ -24,7 +24,7 @@ if __name__ == "__main__":
         if plotHists: plotLogHist2d(xedges, yedges, hist, title)
     # ROC curve
     muLR = muonScoreLR(xedges, yedges, upper, lower, histLR)
-    cuts = np.linspace(0, 1)
+    cuts = np.geomspace(0.01, 40, 100)
     plotROC(muAny, muLR, cuts)
 
     # fig 14
@@ -45,7 +45,6 @@ if __name__ == "__main__":
     plt.plot(bins[:-1],ft,color="orange",linestyle="--",label="not mu & tagged")
     plt.plot(bins[:-1],tt,color="blue",label="mu & tagged")
     plt.plot(bins[:-1],tf,color="blue",linestyle="--",label="mu & not tagged")
-    plt.legend()
     plt.xscale("log")
     plt.yscale("log")
     plt.xlabel("upper cell PEs")
