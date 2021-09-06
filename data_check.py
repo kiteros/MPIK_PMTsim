@@ -7,10 +7,13 @@ raise DeprecationWarning("Outdated, use extract_data instead!")
 
 # detector geometry
 pmtIdG, east, north = np.loadtxt("data/swgo_reference_survey.txt", unpack=True)
+print(pmtIdG.shape)
 makePlots = True
 if makePlots:
     plt.figure(1)
-    plt.scatter(east, north, c="grey")
+    plt.scatter(east/100, north/100, c="grey")
+    plt.xlabel("x/m")
+    plt.ylabel("y/m")
 
 # shower events
 path = "data/gammabbww/" # gamma 5, 46 broken?
@@ -38,10 +41,10 @@ for pmtIds, peTimes, ft, ex, ey, parPType in zip(events["HAWCSim.PE.PMTID"], eve
     if makePlots:
         cm = plt.cm.get_cmap("YlOrRd")
         plt.figure(1)
-        plt.scatter(east, north, c="grey")
-        plt.scatter(east[(pmtIdP/2).astype(int)], north[(pmtIdP/2).astype(int)], vmin=cntPL.min(), vmax=cntPL.max(), c=cntPL, cmap=cm)
-        plt.scatter(ex,ey,marker="x")
-        plt.gca().add_patch(plt.Circle((ex,ey),20*100,fill=False))
+        plt.scatter(east/100, north/100, c="grey")
+        plt.scatter(east[(pmtIdP/2).astype(int)]/100, north[(pmtIdP/2).astype(int)]/100, vmin=cntPL.min(), vmax=cntPL.max(), c=cntPL, cmap=cm)
+        plt.scatter(ex/100,ey/100,marker="x")
+        plt.gca().add_patch(plt.Circle((ex/100,ey/100),20,fill=False))
     # tag pmt signals
     tagsUpper = np.zeros(pmtIdG.shape,dtype=int)
     tagsLower = np.zeros(pmtIdG.shape,dtype=int)

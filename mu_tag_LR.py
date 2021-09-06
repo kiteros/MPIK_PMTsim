@@ -89,7 +89,7 @@ if __name__ == "__main__":
     plt.legend()
 
     # analyse wrt energy
-    #energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
+    energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst, eBinCnt)
 
     # save muon tagger
     mt.save("models/mu_tag_LR_PEs")

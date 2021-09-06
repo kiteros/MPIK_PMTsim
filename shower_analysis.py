@@ -539,17 +539,17 @@ def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=Tru
     selG = primaries["showerType"][ids] == ID_PHOTON
     # plot
     if plotProfiles:
-        plt.figure(4)
-        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selP], tCnts[selP]), label="protons")
-        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG], tCnts[selG]), label="gammas")
+        plt.figure()
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selP]/1000, tCnts[selP]), label="protons")
+        plt.errorbar(*profilePoints(primaries["showerEnergy"][ids][selG]/1000, tCnts[selG]), label="gammas")
         plt.title("Muons per shower")
-        plt.xlabel("Energy")
-        plt.ylabel("Muons")
+        plt.xlabel("Energy/TeV")
+        plt.ylabel("Relative muon count")
         plt.legend()
 
     # energy dependent cuts
     if plotEdst:
-        plt.figure(5)
+        plt.figure()
         plt.title("Energy dependent shower tagging")
     energyBins = np.histogram_bin_edges(primaries["showerEnergy"][ids],eBinCnt)
     snrBest = np.empty((energyBins.size-1,5))
@@ -564,7 +564,7 @@ def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=Tru
         plt.colorbar(label="minimum muons per shower")
 
     # plot signal to background ratio
-    plt.figure(6)
+    plt.figure()
     plt.title("Signal to background ratio")
     plt.scatter(cuts[snrBest[:,0].astype(int)],sep[snrBest[:,1].astype(int)],c=np.log(snrBest[:,2]))
     for x,y,snr,minE,maxE in snrBest:

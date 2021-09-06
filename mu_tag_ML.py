@@ -11,7 +11,7 @@ from keras.callbacks import EarlyStopping
 
 # setup net
 trainModel = False
-filename = "models/mu_tag_ML_at4uws"
+filename = "models/mu_tag_ML_at4uw"
 if trainModel:
     inputs = keras.Input(shape=(4,))
     x = layers.Dense(6, activation="relu")(inputs)
@@ -41,7 +41,7 @@ _, muAny = getEMuTags(taggedPmtEvts)
 idx = np.arange(data.shape[0])
 np.random.default_rng().shuffle(idx)
 #TODO how to get good statistics and a reasonable size?
-train, test = np.split(idx,[int(data.shape[0]*0.1)])
+train, test = np.split(idx,[int(data.shape[0]*0.5)])
 #train = train[muAny[train]*1 + np.random.random(muAny[train].shape) > 1-muAny[train].sum()/train.size] # sample down
 x_train = data[train]
 x_test = data[test]
