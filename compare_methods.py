@@ -23,6 +23,7 @@ plt.figure()
 plt.title("ROC curve")
 plt.xlabel("false muons")
 plt.ylabel("true muons")
+plt.xscale("log") #TODO fix curves
 for mt, lbl in zip([mtLR, mtRise, mtCT, mtML],["charge LR", "rise time LR", "charge time LR", "charge rise ML"
     ]):
     y_pred = mt.muonScore(taggedPmtEvts)

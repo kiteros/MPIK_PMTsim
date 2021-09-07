@@ -507,12 +507,42 @@ def profilePoints(xs, ys):
         yerr[i] = np.std(ys[sel])
     return x,y,yerr,xerr
 
-def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=True, eBinCnt=4, plotProfiles=True):
+def profilePointPercentiles(xs, ys, q=np.array([0.01, 0.25, 0.75, 0.99])):
+    """
+	Creates profile plot points with percentiles from (x,y) data.
+
+	Parameters
+	----------
+	xs : ndarray
+		list of x coordinates
+	ys : ndarray
+		list of y coordinates
+    q : ndarray, optional
+        list of percentiles, default is [0.01, 0.25, 0.75, 0.99]
+	
+	Returns
+	-------
+	tuple of ndarray
+		means of x and y and the given percentiles of y
+	"""
+    bins = np.histogram_bin_edges(xs)
+    x = np.empty(bins.size-1)
+    y = np.empty(x.shape)
+    yp = np.empty((x.size,q.size))
+    for i in np.arange(x.size):
+        sel = np.logical_and(xs > bins[i],xs <= bins[i+1])
+        x[i] = np.mean(xs[sel])
+        y[i] = np.mean(ys[sel])
+        yp[i] = np.percentile(ys[sel],q*100)
+    return x,y,yp
+
+def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=True, eBinCnt=4, plotProfiles=True, plotPercentiles=False):
     """
 	Creates multiple plots for energy dependent shower analysis.
     Figure 4 shows profile lines for muon number-energy dependece.
     Figure 5 shows ROC curves for different energies and cuts.
     Figure 6 shows the optimal cuts for each energy based on SBR.
+    TODO update documentation
 
     Parameters
     ----------
@@ -534,6 +564,8 @@ def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=Tru
         number of energy bins, default is 4
     plotProfiles - bool, optional
         plot figure 4, default is True
+    plotPercentiles - bool, optional
+        plot profile plots, but with shaded percentiles, default is False
 	"""
     selP = primaries["showerType"][ids] == ID_PROTON
     selG = primaries["showerType"][ids] == ID_PHOTON
@@ -546,6 +578,21 @@ def energyDependentAnalysis(cnts, tCnts, cuts, sep, ids, primaries, plotEdst=Tru
         plt.xlabel("Energy/TeV")
         plt.ylabel("Relative muon count")
         plt.legend()
+    if plotPercentiles:
+        plt.figure()
+        x, y, yp = profilePointPercentiles(primaries["showerEnergy"][ids][selP]/1000, tCnts[selP])
+        plt.fill_between(x, yp[:,0], yp[:,3], alpha=0.3, facecolor="orange")
+        plt.fill_between(x, yp[:,1], yp[:,2], alpha=0.3, facecolor="orange")
+        plt.plot(x, y, color="orange", label="protons")
+        x, y, yp = profilePointPercentiles(primaries["showerEnergy"][ids][selG]/1000, tCnts[selG])
+        plt.fill_between(x, yp[:,0], yp[:,3], alpha=0.3, facecolor="blue")
+        plt.fill_between(x, yp[:,1], yp[:,2], alpha=0.3, facecolor="blue")
+        plt.plot(x, y, color="blue", label="gammas")
+        plt.title("Muons per shower")
+        plt.xlabel("Energy/TeV")
+        plt.ylabel("Relative muon count")
+        plt.legend()
+
 
     # energy dependent cuts
     if plotEdst:

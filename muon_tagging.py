@@ -198,3 +198,24 @@ class MuTagChargeRise(MuonTagger):
         scoreCT *= muonScoreLR(self.xcedges, self.ycedges, taggedPmtEvents["upper"], taggedPmtEvents["lower"], self.histLR)
         return scoreCT
 
+
+def loadTagger(filename):
+    """
+    Loads a MuonTagger from a file.
+
+    Parameters
+    ----------
+    filename : string
+        name of the MuonTagger including its path (the tagger is stored in a directory)
+
+    Returns
+    -------
+    an instance of MuonTagger
+    """
+    # load config
+    with open(filename+"/config.json","r") as f:
+        config = json.load(f)
+    # choose tagger
+    taggers = {"MuTagLR" : MuTagLR, "MuTagRise": MuTagRise, "MuTagChargeRise": MuTagChargeRise, "MuTagML": MuTagML}
+    mt = taggers[config["type"]]().load(filename)
+    return mt
