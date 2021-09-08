@@ -5,7 +5,7 @@ Scripts for SWGO gamma hadron seperation using muon tagging.
 The following scripts provide command line interfaces:
 * extract_data  
     Use to extract data from shower simulations. Simply give the path to the directory where the simulations are stored:  
-    `python3 extract_data.py data/simulation/`  
+    `python3 extract_data.py -e -p data/simulation/`  
     The script creates two files in the simulation directory containing all relevant data.
 * build_tagger  
     Use to make simple muon taggers. Only charge and time taggers can be made. Uses data from extract_data.
