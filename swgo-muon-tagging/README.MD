@@ -16,8 +16,6 @@ The following scripts provide command line interfaces:
     `python3 tag_events.py -a --sroc -c 1 2 -b 2 data/simulation/`
 
 Ready to use functions can be found here:
-* electronics_simulation  
-    complete class for electronics simulation
 * muon_tagging  
     classes for muon taggers
 * shower_analysis  
@@ -34,4 +32,3 @@ The following taggers are available:
     this tagger is constructed in *mu_tag_ML.py*
 
 Use *compare_methods.py* to compare different muon taggers.
-See *esim_plots.py* for plots regarding electronics simulation.
