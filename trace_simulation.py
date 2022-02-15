@@ -238,9 +238,7 @@ class TraceSimulation:
         signal = np.zeros(times.shape)
         for t in peTimes:
             t += self.timeDist.rvs()
-            signal[
-                int((t - t_min) / self.t_step)
-            ] += self.ampDist.rvs()  # TODO correct?
+            signal[int((t - t_min) / self.t_step)] += self.ampDist.rvs()  # TODO correct?
         return times, signal
 
     def simulateElectronics(self, signal):
@@ -279,9 +277,7 @@ class TraceSimulation:
         if jitter == None:
             jitter = randint.rvs(0, self.oversamp)  # TODO random size?
         stimes = times[jitter :: self.oversamp]
-        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(
-            self.offset, self.noise, stimes.shape
-        )
+        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape)
         samples = samples.astype(int)
         return stimes, samples
 
@@ -323,56 +319,60 @@ class TraceSimulation:
 
 
 def example_usage():
-        from matplotlib import pyplot as plt
+    from matplotlib import pyplot as plt
 
-        ampSpec = np.loadtxt("data/bb3_1700v_spe.txt",unpack=True)
-        timeSpec = "data/bb3_1700v_timing.txt"
-        pulseShape = np.loadtxt("data/bb3_1700v_pulse_shape.txt",unpack=True)
+    ampSpec = np.loadtxt("data/bb3_1700v_spe.txt", unpack=True)
+    timeSpec = "data/bb3_1700v_timing.txt"
+    pulseShape = np.loadtxt("data/bb3_1700v_pulse_shape.txt", unpack=True)
 
-        # init class
-        esim = TraceSimulation(ampSpec="data/bb3_1700v_spe.txt",timeSpec="data/bb3_1700v_timing.txt",pulseShape="data/bb3_1700v_pulse_shape.txt")
+    # init class
+    esim = TraceSimulation(
+        ampSpec="data/bb3_1700v_spe.txt",
+        timeSpec="data/bb3_1700v_timing.txt",
+        pulseShape="data/bb3_1700v_pulse_shape.txt",
+    )
 
-        # plot spectra
-        plt.figure()
-        plt.title("Amplitude spectrum")
-        plt.plot(*esim.ampSpec)
-        plt.xlabel("Amplitude")
+    # plot spectra
+    plt.figure()
+    plt.title("Amplitude spectrum")
+    plt.plot(*esim.ampSpec)
+    plt.xlabel("Amplitude")
 
-        plt.figure()
-        plt.title("Time spectrum")
-        plt.plot(*esim.timeSpec)
-        plt.xlabel("Time/ns")
+    plt.figure()
+    plt.title("Time spectrum")
+    plt.plot(*esim.timeSpec)
+    plt.xlabel("Time/ns")
 
-        plt.figure()
-        plt.title("Pulse shape")
-        plt.plot(*esim.pulseShape)
-        plt.xlabel("Time/ns")
-        plt.ylabel("Amplitude")
+    plt.figure()
+    plt.title("Pulse shape")
+    plt.plot(*esim.pulseShape)
+    plt.xlabel("Time/ns")
+    plt.ylabel("Amplitude")
 
-        # random input data
-        evts = np.random.default_rng().random(10)*100
+    # random input data
+    evts = np.random.default_rng().random(10) * 100
 
-        # pmt signal
-        times, pmtSig = esim.simulatePMTSignal(evts)
-        eleSig = esim.simulateElectronics(pmtSig)
-        plt.figure()
-        plt.title("Simulated signal")
-        plt.scatter(evts,np.zeros(evts.shape))
-        plt.bar(times, pmtSig)
-        plt.plot(times+esim.plotOffset, eleSig)
-        plt.xlabel("Time/ns")
-        plt.ylabel("Amplitude")
+    # pmt signal
+    times, pmtSig = esim.simulatePMTSignal(evts)
+    eleSig = esim.simulateElectronics(pmtSig)
+    plt.figure()
+    plt.title("Simulated signal")
+    plt.scatter(evts, np.zeros(evts.shape))
+    plt.bar(times, pmtSig)
+    plt.plot(times + esim.plotOffset, eleSig)
+    plt.xlabel("Time/ns")
+    plt.ylabel("Amplitude")
 
-        # adc signal
-        stimes, samples = esim.simulateADC(times, eleSig)
-        plt.figure()
-        plt.title("Simulated ADC output")
-        plt.plot(stimes+esim.plotOffset, samples)
-        plt.xlabel("Time/ns")
-        plt.ylabel("ADC output/LSB")
+    # adc signal
+    stimes, samples = esim.simulateADC(times, eleSig)
+    plt.figure()
+    plt.title("Simulated ADC output")
+    plt.plot(stimes + esim.plotOffset, samples)
+    plt.xlabel("Time/ns")
+    plt.ylabel("ADC output/LSB")
 
-        plt.show()
+    plt.show()
 
 
 if __name__ == "__main__":
-        example_usage()
+    example_usage()

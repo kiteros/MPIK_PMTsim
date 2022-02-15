@@ -3,6 +3,7 @@ from muon_tagging import MuTagLR, MuTagRise
 from shower_analysis import loadData, makeHistograms
 import numpy as np
 
+
 def makeRiseTimeTagger(taggedPmtEvents, xedges=None, yedges=None, high="50", low="10", name=None):
     """
     Minimal setup of an MuTagRise muon tagger.
@@ -23,15 +24,18 @@ def makeRiseTimeTagger(taggedPmtEvents, xedges=None, yedges=None, high="50", low
         name of the tagger (may include directory name)
         if no name is given, a name is automatically generated and tagger is saved in `models/`
     """
-    diffUpper = taggedPmtEvents["per"+high+"Upper"]-taggedPmtEvents["per"+low+"Upper"]
-    diffLower = taggedPmtEvents["per"+high+"Lower"]-taggedPmtEvents["per"+low+"Lower"]
-    if xedges==None: xedges = np.geomspace(0.01,500,101)
-    if yedges==None: yedges = np.geomspace(0.01,500,101)
-    *_, histLR = makeHistograms(xedges,yedges,taggedPmtEvents,diffUpper,diffLower)
-    mt = MuTagRise(xedges,yedges,histLR,low=low,high=high)
-    if name==None:
-        name = "models/mu_tag_LR_rise_"+high+"_"+low
+    diffUpper = taggedPmtEvents["per" + high + "Upper"] - taggedPmtEvents["per" + low + "Upper"]
+    diffLower = taggedPmtEvents["per" + high + "Lower"] - taggedPmtEvents["per" + low + "Lower"]
+    if xedges == None:
+        xedges = np.geomspace(0.01, 500, 101)
+    if yedges == None:
+        yedges = np.geomspace(0.01, 500, 101)
+    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvents, diffUpper, diffLower)
+    mt = MuTagRise(xedges, yedges, histLR, low=low, high=high)
+    if name == None:
+        name = "models/mu_tag_LR_rise_" + high + "_" + low
     mt.save(name)
+
 
 def makeChargeTagger(taggedPmtEvents, xedges=None, yedges=None, name=None):
     """
@@ -49,13 +53,16 @@ def makeChargeTagger(taggedPmtEvents, xedges=None, yedges=None, name=None):
         name of the tagger (may include directory name)
         if no name is given, a name is automatically generated and tagger is saved in `models/`
     """
-    if xedges==None: xedges = np.linspace(10**0,10**4,1001)
-    if yedges==None: yedges = np.linspace(10**0,10**4,1001)
-    *_, histLR = makeHistograms(xedges,yedges,taggedPmtEvents)
-    mt = MuTagLR(xedges,yedges,histLR)
-    if name==None:
+    if xedges == None:
+        xedges = np.linspace(10**0, 10**4, 1001)
+    if yedges == None:
+        yedges = np.linspace(10**0, 10**4, 1001)
+    *_, histLR = makeHistograms(xedges, yedges, taggedPmtEvents)
+    mt = MuTagLR(xedges, yedges, histLR)
+    if name == None:
         name = "models/mu_tag_LR_charge"
     mt.save(name)
+
 
 # --- start ---
 if __name__ == "__main__":
@@ -70,9 +77,9 @@ if __name__ == "__main__":
     if args.charge and args.rise and args.name:
         raise ValueError("Cannot specify same name for multiple taggers!")
     # load data
-    tpe, _ = loadData(args.paths,args.exclusion)
+    tpe, _ = loadData(args.paths, args.exclusion)
     # make tagger
     if args.charge:
-        makeChargeTagger(tpe,name=args.name)
+        makeChargeTagger(tpe, name=args.name)
     if args.rise:
-        makeRiseTimeTagger(tpe,name=args.name)
+        makeRiseTimeTagger(tpe, name=args.name)

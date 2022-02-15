@@ -6,22 +6,25 @@ from shower_analysis import *
 if __name__ == "__main__":
     # data
     paths = ["data/protonbbww/", "data/gammabbww/"]
-    xedges = np.load(paths[0]+"xedges.npy")
-    yedges = np.load(paths[0]+"yedges.npy")
+    xedges = np.load(paths[0] + "xedges.npy")
+    yedges = np.load(paths[0] + "yedges.npy")
 
     plotHists = True
 
     # fig 13 (upper/lower ratio)
-    #if plotHists: plotLogHist2d(xedges, yedges, histULAll, path)
+    # if plotHists: plotLogHist2d(xedges, yedges, histULAll, path)
 
     # make individual histograms
-    taggedPmtEvts, _ = loadData(paths,20)
+    taggedPmtEvts, _ = loadData(paths, 20)
     upper, lower, muAny, histEOnly, histMuAny, histLR = makeHistograms(xedges, yedges, taggedPmtEvts)
-    histULAll, *_ = np.histogram2d(upper,lower,bins=[xedges,yedges])
+    histULAll, *_ = np.histogram2d(upper, lower, bins=[xedges, yedges])
     # plot
-    for title, hist in zip(["Charge distribution histogram","Only electrons", "Any muons", "Likelihood ratio"],
-            [histULAll, histEOnly, histMuAny, histLR]):
-        if plotHists: plotLogHist2d(xedges, yedges, hist, title)
+    for title, hist in zip(
+        ["Charge distribution histogram", "Only electrons", "Any muons", "Likelihood ratio"],
+        [histULAll, histEOnly, histMuAny, histLR],
+    ):
+        if plotHists:
+            plotLogHist2d(xedges, yedges, hist, title)
     # ROC curve
     muLR = muonScoreLR(xedges, yedges, upper, lower, histLR)
     cuts = np.geomspace(0.01, 40, 100)
@@ -29,8 +32,8 @@ if __name__ == "__main__":
 
     # fig 14
     tagging = muLR > 10
-    bins = np.logspace(0.5,4)
-    tt = np.empty(bins.size-1)
+    bins = np.logspace(0.5, 4)
+    tt = np.empty(bins.size - 1)
     ff = np.empty(tt.size)
     tf = np.empty(tt.size)
     ft = np.empty(tt.size)
@@ -41,16 +44,13 @@ if __name__ == "__main__":
         tf[i] = np.logical_and(~tagging[sel], muAny[sel]).sum()
         ft[i] = np.logical_and(tagging[sel], ~muAny[sel]).sum()
     plt.figure(14)
-    plt.plot(bins[:-1],ff,color="orange",label="not mu & not tagged")
-    plt.plot(bins[:-1],ft,color="orange",linestyle="--",label="not mu & tagged")
-    plt.plot(bins[:-1],tt,color="blue",label="mu & tagged")
-    plt.plot(bins[:-1],tf,color="blue",linestyle="--",label="mu & not tagged")
+    plt.plot(bins[:-1], ff, color="orange", label="not mu & not tagged")
+    plt.plot(bins[:-1], ft, color="orange", linestyle="--", label="not mu & tagged")
+    plt.plot(bins[:-1], tt, color="blue", label="mu & tagged")
+    plt.plot(bins[:-1], tf, color="blue", linestyle="--", label="mu & not tagged")
     plt.xscale("log")
     plt.yscale("log")
     plt.xlabel("upper cell PEs")
     plt.ylabel("counts")
 
-
-
     plt.show()
-
