@@ -2,8 +2,9 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import norm, rv_histogram, randint
+from scipy.stats import norm, rv_histogram, randint, poisson, expon
 from scipy.signal import resample
+from pulser import Pulser
 
 
 class TraceSimulation:
@@ -47,21 +48,44 @@ class TraceSimulation:
             time offset for nice plotting in ns
     debugPlots : bool
             plot intermediate results if `True`
+    background_rate_method : string
+            Defines the distribution for the BR ("poisson" for a variate per sample, "exponential" for a negative exponential distribution of time
+            delays for black counts). BC can come from thermionic or night sky
+    transit_time_jitter : float
+            gaussian variation of arrival times on the anode of PE
+    electronic_noise_amplitude : float
+            Amplitude of the noise produced by electronics
+    br_amplitude : float
+            Amplitude of the bacgkground rate (not implemented yet)
+    br_mu : float
+            Mu parameter of the poisson distribution of the background rate
+    br_lamda_exp : float
+            Lamda parameter of the exponential distribution
     """
 
     def __init__(
         self,
         f_sample=0.25,
-        oversamp=10,
+        oversamp=40,
         t_pad=200,
-        offset=10,
+        offset=200,
         noise=0.8,
-        gain=15,
+
+        gain=14,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
         jitter=None,
         debugPlots=False,
         timeSpec=None,
         ampSpec=None,
         pulseShape=None,
+
+        ##Flashcam parameters
+        transit_time_jitter = 0.75, #From CTA.cfg, also : 0.64 Obtained from pmt_specs_R11920.cfg
+        electronic_noise_amplitude = 4.0, #From CTA.cfg, high gain
+        background_rate_method = "exponential", #poisson, exponential
+        br_amplitude = 5.0, #Not implemented
+        br_mu = 0.05, #TBD
+        br_lamda_exp = 20.0, #TBD
+        
     ):
         """
         Initializes instances of TraceSimulation class.
@@ -80,8 +104,15 @@ class TraceSimulation:
         self.gain = gain
         self.jitter = jitter
         self.debugPlots = debugPlots
+        self.transit_time_jitter = transit_time_jitter
+        self.electronic_noise_amplitude = electronic_noise_amplitude
+        self.background_rate_method = background_rate_method
+        self.br_amplitude = br_amplitude
+        self.br_mu = br_mu
+        self.br_lamda_exp = br_lamda_exp
+
         # load spectra from file or simulate
-        if timeSpec == None:
+        """if timeSpec == None:
             self.timeSpec = self.simulateTimeSpectrum()
         elif type(timeSpec) is str:
             self.timeSpec = np.loadtxt(timeSpec, unpack=True)
@@ -92,13 +123,20 @@ class TraceSimulation:
                 self.timeDist = rv_histogram((hist, bins))
         else:
             self.timeSpec = timeSpec
+        """
+        #Jitter is very small (<ns) so we can approximate by a gaussian : We don't load the time spectrum anymore
+        self.timeSpec = self.simulateTimeSpectrum(t_sig = self.transit_time_jitter) 
+
+
+        #load ampspec from file
         if ampSpec == None:
             self.ampSpec = self.simulateAmplitudeSpectrum()
             # TODO histogram?
         elif type(ampSpec) is str:
-            self.ampSpec = np.loadtxt(ampSpec, unpack=True)
+            self.ampSpec = [np.loadtxt(ampSpec, unpack=True)[0],np.loadtxt(ampSpec, unpack=True)[1]]
         else:
             self.ampSpec = ampSpec
+
         # load pulse shape from file or simulate
         if pulseShape == None:
             self.pulseShape = self.simulatePulseShape()
@@ -119,6 +157,7 @@ class TraceSimulation:
         sx = self.ampSpec[0]
         bins = np.append(sx, sx[-1] + sx[1] - sx[0])
         self.ampDist = rv_histogram((self.ampSpec[1], bins))
+
 
         # figures for debugging
         if self.debugPlots:
@@ -159,7 +198,7 @@ class TraceSimulation:
         """
         return norm.rvs(t_mu, t_sig, npe)
 
-    def simulateTimeSpectrum(self, t_mu=1, t_sig=1):
+    def simulateTimeSpectrum(self, t_mu=0, t_sig=1):
         """
         Simulates a gaussian time spectrum.
 
@@ -175,10 +214,17 @@ class TraceSimulation:
         tuple of ndarray
                 times in ns and their probabilities
         """
-        tsx = np.arange(int((t_mu + 3 * t_sig) / self.t_step)) * self.t_step
-        return tsx, norm.pdf(tsx, t_mu, t_sig)
+        #Modification to center the gaussian around 0
+        #tsx_onecentered = np.arange( int((t_mu + 3 * t_sig) / self.t_step)) * self.t_step
+        tsx = np.arange( int(((t_mu + 3 * t_sig) / self.t_step)) / 2.0) * self.t_step
+        tsx_negative = np.arange( int(((t_mu + 3 * t_sig) / self.t_step)) / 2.0) * self.t_step * (-1)
+        tsx_negative = tsx_negative[::-1]
+        tsx_negative = tsx_negative[:-1]
+        tsx_zerocentered = np.concatenate((tsx_negative, tsx), axis=None)
 
-    def simulateAmplitudeSpectrum(self, a_mu=1, a_sig=1):
+        return tsx_zerocentered, norm.pdf(tsx_zerocentered, t_mu, t_sig)
+
+    def simulateAmplitudeSpectrum(self, a_mu=0, a_sig=1):
         """
         Simulates a gaussian amplitude spectrum.
 
@@ -277,9 +323,45 @@ class TraceSimulation:
         if jitter == None:
             jitter = randint.rvs(0, self.oversamp)  # TODO random size?
         stimes = times[jitter :: self.oversamp]
-        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape)
+        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape) * self.electronic_noise_amplitude
         samples = samples.astype(int)
         return stimes, samples
+
+    def simulateBackground(self, evts):
+        """
+        Simulate random emmission of PE either from the inside of the PMT (thermionic, rogue electron), or from photons arriving
+        from background sources (eg. night sky)
+
+        Parameters
+        ----------
+        evts - array_like times of PE in ns
+
+        Returns
+        -------
+        array_like of new times of PE in ns
+        
+        """
+        
+        if self.background_rate_method == "exponential":
+            t_min = evts.min() - self.t_pad
+            t_max = evts.max() + self.t_pad
+            sxap = t_min
+            while sxap < t_max:
+                sxap += expon.rvs(scale = self.br_lamda_exp)
+                evts = np.append(evts, sxap)
+        elif self.background_rate_method == "poisson":
+            t_min = evts.min() - self.t_pad
+            t_max = evts.max() + self.t_pad
+            times = np.arange((int(t_max - t_min) / self.t_step)) * self.t_step + t_min
+
+            for t in times:
+                p_pdf = poisson.rvs(self.br_mu, size=1)
+                if p_pdf != 0:
+                    for i in range(p_pdf[0]):
+                        evts = np.append(evts, t)
+        
+        return evts
+
 
     def simulateAll(self, peTimes):
         """
@@ -321,18 +403,24 @@ class TraceSimulation:
 def example_usage():
     from matplotlib import pyplot as plt
 
-    ampSpec = np.loadtxt("data/bb3_1700v_spe.txt", unpack=True)
+    #ampSpec = np.loadtxt("data/bb3_1700v_spe.txt", unpack=True)
+
+    #Amplitude spectrum obtained from spe_R11920-RM_ap0.0002.dat
+    ampSpec = np.loadtxt("newdata/spe_R11920-RM_ap0.0002.dat", unpack=True)
     timeSpec = "data/bb3_1700v_timing.txt"
     pulseShape = np.loadtxt("data/bb3_1700v_pulse_shape.txt", unpack=True)
 
     # init class
     esim = TraceSimulation(
-        ampSpec="data/bb3_1700v_spe.txt",
+        ampSpec="newdata/spe_R11920-RM_ap0.0002.dat",
         timeSpec="data/bb3_1700v_timing.txt",
         pulseShape="data/bb3_1700v_pulse_shape.txt",
     )
 
+
+
     # plot spectra
+
     plt.figure()
     plt.title("Amplitude spectrum")
     plt.plot(*esim.ampSpec)
@@ -349,11 +437,16 @@ def example_usage():
     plt.xlabel("Time/ns")
     plt.ylabel("Amplitude")
 
-    # random input data
-    evts = np.random.default_rng().random(10) * 100
+    #Create a pulser class
+    pulse = Pulser(step=esim.t_step)
+
+    evts = pulse.generate_all()
+
+    #we need to add random evts that follow a negative exponential for the background rate
+    evts_br = esim.simulateBackground(evts)
 
     # pmt signal
-    times, pmtSig = esim.simulatePMTSignal(evts)
+    times, pmtSig = esim.simulatePMTSignal(evts_br)
     eleSig = esim.simulateElectronics(pmtSig)
     plt.figure()
     plt.title("Simulated signal")
@@ -371,7 +464,10 @@ def example_usage():
     plt.xlabel("Time/ns")
     plt.ylabel("ADC output/LSB")
 
+
     plt.show()
+
+
 
 
 if __name__ == "__main__":
