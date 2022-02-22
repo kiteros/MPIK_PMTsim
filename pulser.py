@@ -2,7 +2,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import norm, rv_histogram, randint, poisson, expon
+from scipy.stats import norm, rv_histogram, randint, poisson, expon, exponnorm
 from scipy.signal import resample
 import scipy.integrate as integrate
 import scipy
@@ -15,7 +15,9 @@ class Pulser:
         self, 
         pulser_type="PDL800-D",
         step=0.5,
-        duration=400.0):
+        duration=400.0,
+        pulse_type="single",#"pulsed", "none", "single"
+        ):
 
         self.step = step
         self.duration = duration #ns
@@ -26,9 +28,12 @@ class Pulser:
             self.pulse_width = 20#ns
             self.average_power = 50e-3 #W
             self.wvl = 600e-9 #wavelenght in m
+            self.pe_intensity = 40 #number of PE in a pulse
+            self.pulse_type = pulse_type
+
 
     
-    def generate_peTimes(self, times, pulse):
+    def generate_peTimes_photon(self, times, pulse):
         """
         General the arrival times on the cathode of the PE with respect to the number of photons present in the pulse
 
@@ -58,12 +63,26 @@ class Pulser:
 
         peTimes = pulse_dist.rvs(size=int(nb_photon/reduction_factor))
 
-        plt.figure()
-        plt.title("Laser/LED pulse spectrum")
-        plt.plot(times, pulse)
-        plt.xlabel("Pulse")
+        
 
         return peTimes
+
+    def generate_peTimes_pe(self, times, pulse):
+
+        if self.pulse_type == "none":
+            peTimes = []
+        else:
+            #Generate a poissonian variation of the number of PE
+            n_pe = poisson.rvs(self.pe_intensity,size=1)[0]
+            #generate the pulse from a gaussian + exponential
+
+            bins = np.append(times, times[-1] + times[1] - times[0])
+            pulse_dist = rv_histogram((pulse,bins))
+
+            peTimes = pulse_dist.rvs(size=int(n_pe))
+        
+        return peTimes
+
     
 
     def generate_pulse(self, depart=0, fwmh=3.0):
@@ -83,27 +102,41 @@ class Pulser:
 
         tsx = np.arange(0, self.duration, 1)
 
-        if depart==0:
-            depart = 2*fwmh
-
-        #period in ns
-        period = (1.0/self.max_frequency)*(1e9)
-        print(period)
-
-        #generate array for all the mus of the pulses
-        peak_positions = np.array([])
-        signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.sqrt(2))))
+        if self.pulse_type == "single":
+            signal = exponnorm.pdf(tsx, K=10, loc=2*fwmh, scale=3)
+            plt.figure()
+            plt.title("Laser/LED pulse spectrum")
+            plt.plot(tsx, signal)
+            plt.xlabel("Pulse")
 
 
-        while depart < self.duration:
-            #depart stores the positions of the mu of the last pulse
-            depart += period
-            depart += norm.rvs(0.0, self.pulse_to_pulse_jitter)
-            peak_positions = np.append(peak_positions, depart)
+        elif self.pulse_type == "none":
+
+            if depart==0:
+                depart = 2*fwmh
+
+            #period in ns
+            period = (1.0/self.max_frequency)*(1e9)
+
+            #generate array for all the mus of the pulses
+            peak_positions = np.array([])
+            signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.sqrt(2))))
+
+
+            while depart < self.duration:
+                #depart stores the positions of the mu of the last pulse
+                depart += period
+                depart += norm.rvs(0.0, self.pulse_to_pulse_jitter*1e-3)
+                peak_positions = np.append(peak_positions, depart)
+            
+            for i in peak_positions:
+                #add a new gaussian for each mu
+                signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.sqrt(2))))
+
+        else:
+            signal = np.zeros(len(tsx))
+
         
-        for i in peak_positions:
-            #add a new gaussian for each mu
-            signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.sqrt(2))))
         
         return tsx, signal
 
@@ -118,7 +151,7 @@ class Pulser:
         """
 
         times, pulse = self.generate_pulse(fwmh=self.pulse_width)
-        peTimes = self.generate_peTimes(times, pulse)
+        peTimes = self.generate_peTimes_pe(times, pulse)
         return peTimes
 
         
