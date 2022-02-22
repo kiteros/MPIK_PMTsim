@@ -69,6 +69,20 @@ class Pulser:
 
     def generate_peTimes_pe(self, times, pulse):
 
+        """
+        General the arrival times on the cathode of the PE with respect to the number of PE inside the pulse
+
+        Parameters
+        ----------
+        times - array_like times of signal in ns
+
+        pulse - Amplitudes of signal
+
+        Returns
+        -------
+        Array - Starting times of the PE from the incoming signal (on the cathode)
+        """
+
         if self.pulse_type == "none":
             peTimes = []
         else:
