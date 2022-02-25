@@ -23,7 +23,8 @@ class Pulser:
         self.duration = duration #ns
 
         if(pulser_type == "PDL800-D"):
-            self.pulse_to_pulse_jitter = 2.6 #ps
+            self.pulse_to_pulse_method = "percent", #percent
+            self.pulse_to_pulse_jitter = 0.05#2.6ps
             self.max_frequency = 20e6 #Hz (real between 80 MHz and 31.25 KHz)
             self.pulse_width = 20#ns
             self.average_power = 50e-3 #W
@@ -140,7 +141,11 @@ class Pulser:
             while depart < self.duration:
                 #depart stores the positions of the mu of the last pulse
                 depart += period
-                depart += norm.rvs(0.0, self.pulse_to_pulse_jitter*1e-3)
+
+                if self.pulse_to_pulse_method == "absolute":
+                    depart += norm.rvs(0.0, self.pulse_to_pulse_jitter*1e-3)
+                elif self.pulse_to_pulse_method == "percent":
+                    depart += norm.rvs(0.0, period*self.pulse_to_pulse_jitter/(2*math.sqrt(2*math.log(2))))
                 peak_positions = np.append(peak_positions, depart)
             
             for i in peak_positions:

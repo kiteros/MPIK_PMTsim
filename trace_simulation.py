@@ -73,7 +73,7 @@ class TraceSimulation:
         oversamp=40,
         t_pad=200,
         offset=200,
-        noise=0.8,
+        noise=0.8, #ADC noise : 0.5 - 1.5 LSB
 
         #Gain from 2 to 15 LSB
         gain=10,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
@@ -87,7 +87,8 @@ class TraceSimulation:
         transit_time_jitter = 0.75, #From CTA.cfg, also : 0.64 Obtained from pmt_specs_R11920.cfg
         #electronic_noise_amplitude = 4.0, #From CTA.cfg, high gain
 
-        background_rate_method = "exponential", #poisson, exponential
+        background_rate_method = "poisson", #poisson, exponential
+        #TODO : Issue with the exponential
 
         #NSB from 0..2GHz
         background_rate = 1e7, #Hz
@@ -96,8 +97,8 @@ class TraceSimulation:
         no_signal_duration = 1e5, #in ns
         remove_padding = True,
 
-        max_nsb_var = 0.1, #Maximum variation of the NSB per second
-        nsb_fchange = 1e4 #Hz frequency for the implemented variation of nsb var rate
+        max_nsb_var = 1e-1, #Maximum variation of the NSB per second
+        nsb_fchange = 1e6 #Hz frequency for the implemented variation of nsb var rate
         
     ):
         """
@@ -353,7 +354,7 @@ class TraceSimulation:
         if jitter == None:
             jitter = randint.rvs(0, self.oversamp)  # TODO random size?
         stimes = times[jitter :: self.oversamp]
-        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape) #* self.electronic_noise_amplitude
+        samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape)
         samples = samples.astype(int)
 
         #Removing padding for easier readability
@@ -387,10 +388,8 @@ class TraceSimulation:
 
         mu = self.background_rate * 1e-9#From the def E(exp) = 1/mu
 
-        print(mu)
-
         #Implement change of nsb per second
-        var_time = 1/self.nsb_fchange
+        var_time = (1/self.nsb_fchange) * 1e9 #ns
 
         #first value of the background rate for reference
         bg_ref = self.background_rate
@@ -406,18 +405,32 @@ class TraceSimulation:
                 evts_list = []
             sxap = t_min
             time_delay = 0
+            cum_time = 0
 
             #convert np.array() to python list
             
             while sxap < t_max:
-                sxap += expon.rvs(scale = 1/mu) #scale = 1/mu
+                sxap += expon.rvs(scale = 1/abs(mu)) #scale = 1/mu
                 #print(expon.rvs(scale = 1/mu))
                 time_delay += sxap
+                cum_time += sxap
                 evts_list.append(sxap)
+
+                """
+                print("times",time_delay)
+                print("mu", mu)
+                print("bck", self.background_rate)
+                """
+                
                 if time_delay > var_time:
-                    self.background_rate += norm.rvs(0, ((self.max_nsb_var * time_delay * bg_ref)/var_time)/(2*math.sqrt(2*math.log(2))), 1)[0]
+                    self.background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
+                    mu = self.background_rate * 1e-9#From the def E(exp) = 1/mu
+                    time_delay = 0
+                    #print(((self.max_nsb_var * bg_ref)/(var_time ))/(2*math.sqrt(2*math.log(2))))
 
             evts = np.array(evts_list)
+
+
         elif self.background_rate_method == "poisson":
             if len(evts) > 0:
                 t_min = evts.min() - self.t_pad
@@ -430,9 +443,27 @@ class TraceSimulation:
                 evts_list = []
 
             
+            n_steps_var_time = int(var_time // self.t_step)
+            n_step_tot = int((t_max - t_min) // self.t_step)
+            n_intervals = int(n_step_tot // n_steps_var_time)
 
-            for i, q in enumerate(poisson.rvs(lamda, size=int((t_max - t_min) // self.t_step))):
-                evts_list.extend([t_min + i * self.t_step] * q)
+            #Make a security if n_step_var_time is bigger than the total time 
+
+
+            #We divide the whole signal in intervals with nsb_fchange and change the br for each interval
+            for j in range(n_intervals):
+                #recalculate the lamda each time
+
+                for i, q in enumerate(poisson.rvs(abs(lamda), size=n_steps_var_time)):
+                    evts_list.extend([t_min + j*var_time + i * self.t_step] * q)
+
+                print(self.background_rate)
+                self.background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
+                lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
+
+            #fill the last interval
+            for i, q in enumerate(poisson.rvs(abs(lamda), size=int((t_max - n_intervals*var_time) // self.t_step))):
+                evts_list.extend([t_min + var_time*n_intervals + i * self.t_step] * q)
 
             evts = np.array(evts_list)
         
@@ -564,7 +595,7 @@ def example_usage():
     ratio_bl_exp = []
 
     #Varying the background rate
-    for i in np.logspace(5.0, 9.3, num=3):
+    for i in np.logspace(8.0, 9.3, num=3):
         esim = TraceSimulation(
             ampSpec="data/spe_R11920-RM_ap0.0002.dat",
             timeSpec="data/bb3_1700v_timing.txt",
@@ -598,6 +629,14 @@ def example_usage():
         plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
         plt.xlabel("Time/ns")
         plt.ylabel("ADC output/LSB")
+
+        plt.figure()
+        plt.title("Simulated signal")
+        #plt.scatter(evts_br, np.zeros(evts_br.shape))
+        #plt.bar(times, pmtSig)
+        plt.plot(times + esim.plotOffset, eleSig)
+        plt.xlabel("Time/ns")
+        plt.ylabel("Amplitude")
 
 
 
