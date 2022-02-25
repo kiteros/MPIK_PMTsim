@@ -5,6 +5,10 @@ from matplotlib import pyplot as plt
 from scipy.stats import norm, rv_histogram, randint, poisson, expon
 from scipy.signal import resample
 from pulser import Pulser
+import statistics
+import scipy.integrate as integrate
+import math 
+
 
 
 class TraceSimulation:
@@ -71,7 +75,8 @@ class TraceSimulation:
         offset=200,
         noise=0.8,
 
-        gain=14,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
+        #Gain from 2 to 15 LSB
+        gain=10,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
         jitter=None,
         debugPlots=False,
         timeSpec=None,
@@ -83,8 +88,16 @@ class TraceSimulation:
         #electronic_noise_amplitude = 4.0, #From CTA.cfg, high gain
 
         background_rate_method = "exponential", #poisson, exponential
-        background_rate = 100, #Hz
-        show_graph = False
+
+        #NSB from 0..2GHz
+        background_rate = 1e7, #Hz
+        show_graph = False,
+
+        no_signal_duration = 1e5, #in ns
+        remove_padding = True,
+
+        max_nsb_var = 0.1, #Maximum variation of the NSB per second
+        nsb_fchange = 1e4 #Hz frequency for the implemented variation of nsb var rate
         
     ):
         """
@@ -109,6 +122,11 @@ class TraceSimulation:
         self.background_rate_method = background_rate_method
         self.background_rate = background_rate
         self.show_graph = show_graph
+        self.no_signal_duration = no_signal_duration
+        self.remove_padding = remove_padding
+        self.ampDist_drift = 1.025457559561722
+        self.max_nsb_var = max_nsb_var
+        self.nsb_fchange = nsb_fchange
 
 
         if isinstance(timeSpec, str):
@@ -134,8 +152,9 @@ class TraceSimulation:
             self.ampSpec = self.simulateAmplitudeSpectrum()
             # TODO histogram?
         elif type(ampSpec) is str:
-            self.ampSpec = [np.loadtxt(ampSpec, unpack=True)[0],np.loadtxt(ampSpec, unpack=True)[1]]
-            
+            #self.ampSpec = [np.loadtxt(ampSpec, unpack=True)[0],np.loadtxt(ampSpec, unpack=True)[1]]
+            self.ampSpec = np.loadtxt(ampSpec)[:,:2].T
+
         else:
             self.ampSpec = ampSpec
 
@@ -150,6 +169,15 @@ class TraceSimulation:
             self.pulseShape = (t, ps)
             # offset from center (for plots only)
             self.plotOffset = (t[-1] + t[0]) / 2
+
+
+            ##calculate the parameters of the pulse shape
+            #self.singePE_area = integrate.quad(ps, t, initial=0)[-1]
+            sum_ = 0
+            for i in ps:
+                sum_ += i*step
+
+            self.singePE_area = sum_
         else:
             self.pulseShape = pulseShape
         # get distributions of spectra
@@ -286,7 +314,7 @@ class TraceSimulation:
         signal = np.zeros(times.shape)
         for t in peTimes:
             t += self.timeDist.rvs()
-            signal[int((t - t_min) / self.t_step)] += self.ampDist.rvs()  # TODO correct?
+            signal[int((t - t_min) / self.t_step)] += self.ampDist.rvs() / self.ampDist_drift # TODO correct?
         return times, signal
 
     def simulateElectronics(self, signal):
@@ -327,6 +355,15 @@ class TraceSimulation:
         stimes = times[jitter :: self.oversamp]
         samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape) #* self.electronic_noise_amplitude
         samples = samples.astype(int)
+
+        #Removing padding for easier readability
+        if self.remove_padding:
+            extra_padding = 5
+            stimes = stimes[int(self.t_pad // 4)+extra_padding:]
+            samples = samples[int(self.t_pad // 4)+extra_padding:]
+            stimes = stimes[:len(stimes) - int(self.t_pad // 4) - extra_padding]
+            samples = samples[:len(samples) - int(self.t_pad // 4) - extra_padding]
+
         return stimes, samples
 
     def simulateBackground(self, evts):
@@ -346,14 +383,18 @@ class TraceSimulation:
 
         #calculate the poissonian lamda and exp mu
 
-        lamda = self.t_step * self.background_rate #From the def E(poisson) = lamda
+        lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
 
-        mu = self.background_rate #From the def E(exp) = 1/mu
+        mu = self.background_rate * 1e-9#From the def E(exp) = 1/mu
 
         print(mu)
-        print(lamda)
 
-        
+        #Implement change of nsb per second
+        var_time = 1/self.nsb_fchange
+
+        #first value of the background rate for reference
+        bg_ref = self.background_rate
+
         if self.background_rate_method == "exponential":
             if len(evts) > 0:
                 t_min = evts.min() - self.t_pad
@@ -361,15 +402,20 @@ class TraceSimulation:
                 evts_list = evts.tolist()
             else :
                 t_min = (-1) * self.t_pad
-                t_max = self.t_pad
+                t_max = self.no_signal_duration + self.t_pad
                 evts_list = []
             sxap = t_min
+            time_delay = 0
 
             #convert np.array() to python list
             
             while sxap < t_max:
-                sxap += expon.rvs(scale = mu)
+                sxap += expon.rvs(scale = 1/mu) #scale = 1/mu
+                #print(expon.rvs(scale = 1/mu))
+                time_delay += sxap
                 evts_list.append(sxap)
+                if time_delay > var_time:
+                    self.background_rate += norm.rvs(0, ((self.max_nsb_var * time_delay * bg_ref)/var_time)/(2*math.sqrt(2*math.log(2))), 1)[0]
 
             evts = np.array(evts_list)
         elif self.background_rate_method == "poisson":
@@ -380,17 +426,39 @@ class TraceSimulation:
                 evts_list = evts.tolist()
             else :
                 t_min = (-1) * self.t_pad
-                t_max = self.t_pad
+                t_max = self.no_signal_duration + self.t_pad
                 evts_list = []
 
             
 
-            for i, q in enumerate(poisson.rvs(self.br_mu, size=(t_max - t_min) // t_step)):
-                evts_list.extend([t_min + i * t_step] * q)
+            for i, q in enumerate(poisson.rvs(lamda, size=int((t_max - t_min) // self.t_step))):
+                evts_list.extend([t_min + i * self.t_step] * q)
 
             evts = np.array(evts_list)
         
+
         return evts
+
+    def FPGA(self, times, signal):
+
+        bl = signal[0]
+        bl_array = []
+
+        for i in range(len(times)):
+            if signal[i] > bl:
+                bl += 0.125
+
+            elif signal[i] < bl:
+                bl -= 0.125
+
+            bl_array.append(bl)
+
+        #need to return both the baseline mean and signal mean
+
+        bl_mean = statistics.fmean(bl_array)
+        s_mean = statistics.fmean(signal)
+
+        return bl_mean, s_mean, np.std(bl_array-signal)
 
 
     def simulateAll(self, peTimes):
@@ -438,13 +506,13 @@ def example_usage():
     #Amplitude spectrum obtained from spe_R11920-RM_ap0.0002.dat
     ampSpec = np.loadtxt("data/bb3_1700v_spe.txt", unpack=True)
     timeSpec = "data/bb3_1700v_timing.txt"
-    pulseShape = np.loadtxt("data/bb3_1700v_pulse_shape.txt", unpack=True)
+    pulseShape = np.loadtxt("data/pulse_FlashCam_7dynode_v2a.dat", unpack=True)
 
     # init class
     esim = TraceSimulation(
         ampSpec="data/spe_R11920-RM_ap0.0002.dat",
         timeSpec="data/bb3_1700v_timing.txt",
-        pulseShape="data/bb3_1700v_pulse_shape.txt",
+        pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
     )
 
 
@@ -473,34 +541,90 @@ def example_usage():
 
     evts = pulse.generate_all()
 
-    #we need to add random evts that follow a negative exponential for the background rate
-    evts_br = esim.simulateBackground(evts)
-
-    # pmt signal
-    times, pmtSig = esim.simulatePMTSignal(evts_br)
-    eleSig = esim.simulateElectronics(pmtSig)
-    plt.figure()
-    plt.title("Simulated signal")
-    plt.scatter(evts_br, np.zeros(evts_br.shape))
-    plt.bar(times, pmtSig)
-    plt.plot(times + esim.plotOffset, eleSig)
-    plt.xlabel("Time/ns")
-    plt.ylabel("Amplitude")
-
-    # adc signal
-    stimes, samples = esim.simulateADC(times, eleSig)
-    plt.figure()
-    plt.title("Simulated ADC output")
-    plt.plot(stimes + esim.plotOffset, samples)
-    plt.xlabel("Time/ns")
-    plt.ylabel("ADC output/LSB")
-
-
-    plt.show()
+    #
 
     
 
+    """
+    plt.figure()
+        plt.title("Simulated signal")
+        plt.scatter(evts_br, np.zeros(evts_br.shape))
+        plt.bar(times, pmtSig)
+        plt.plot(times + esim.plotOffset, eleSig)
+        plt.xlabel("Time/ns")
+        plt.ylabel("Amplitude")
+    
+    """
 
+    bl_mean_array = []
+    s_mean_array = []
+    freq = []
+    std_dev = []
+    theoretical = []
+    ratio_bl_exp = []
+
+    #Varying the background rate
+    for i in np.logspace(5.0, 9.3, num=3):
+        esim = TraceSimulation(
+            ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+            timeSpec="data/bb3_1700v_timing.txt",
+            pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+            background_rate = i,
+        )
+
+        #we need to add random evts that follow a negative exponential for the background rate
+        evts_br = esim.simulateBackground(evts)
+
+        # pmt signal
+        times, pmtSig = esim.simulatePMTSignal(evts_br)
+        eleSig = esim.simulateElectronics(pmtSig)
+
+        # adc signal
+        stimes, samples = esim.simulateADC(times, eleSig)
+
+        bl_mean, s_mean, std = esim.FPGA(stimes, samples)
+
+        bl_mean_array.append(bl_mean)
+        s_mean_array.append(s_mean)
+        freq.append(i)
+        std_dev.append(std)
+        theoretical.append(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset)
+        ratio_bl_exp.append(bl_mean/(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset))
+        
+
+        plt.figure()
+        plt.title("Simulated ADC output")
+        plt.plot(stimes + esim.plotOffset, samples)
+        plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
+        plt.xlabel("Time/ns")
+        plt.ylabel("ADC output/LSB")
+
+
+
+            
+    plt.figure()
+    plt.title("Baseline shift")
+    plt.plot(freq, bl_mean_array)
+    plt.plot(freq, s_mean_array)
+    plt.plot(freq, theoretical)
+    plt.xlabel("f")
+    plt.ylabel("mean")
+
+    plt.figure()
+    plt.title("Baseline stddev")
+    plt.plot(freq, std_dev)
+    plt.xlabel("f")
+    plt.ylabel("mean")
+
+    plt.figure()
+    plt.title("Ratio")
+    plt.plot(freq, ratio_bl_exp)
+    plt.xlabel("f")
+    plt.ylabel("mean")
+    
+    
+
+    plt.show()
 
 
 if __name__ == "__main__":

@@ -15,8 +15,8 @@ class Pulser:
         self, 
         pulser_type="PDL800-D",
         step=0.5,
-        duration=400.0,
-        pulse_type="single",#"pulsed", "none", "single"
+        duration=1e5,
+        pulse_type="pulsed",#"pulsed", "none", "single"
         ):
 
         self.step = step
@@ -124,7 +124,7 @@ class Pulser:
             plt.xlabel("Pulse")
 
 
-        elif self.pulse_type == "none":
+        elif self.pulse_type == "pulsed":
 
             if depart==0:
                 depart = 2*fwmh
@@ -134,7 +134,7 @@ class Pulser:
 
             #generate array for all the mus of the pulses
             peak_positions = np.array([])
-            signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.sqrt(2))))
+            signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.log(2))))
 
 
             while depart < self.duration:
@@ -145,7 +145,12 @@ class Pulser:
             
             for i in peak_positions:
                 #add a new gaussian for each mu
-                signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.sqrt(2))))
+                signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
+
+            plt.figure()
+            plt.title("Laser/LED pulse spectrum")
+            plt.plot(tsx, signal)
+            plt.xlabel("Pulse")
 
         else:
             signal = np.zeros(len(tsx))
