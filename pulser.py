@@ -15,8 +15,8 @@ class Pulser:
         self, 
         pulser_type="PDL800-D",
         step=0.5,
-        duration=1e5,
-        pulse_type="pulsed",#"pulsed", "none", "single"
+        duration=1e3,
+        pulse_type="none",#"pulsed", "none", "single"
         ):
 
         self.step = step

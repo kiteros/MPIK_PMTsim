@@ -98,7 +98,9 @@ class TraceSimulation:
         remove_padding = True,
 
         max_nsb_var = 1e-1, #Maximum variation of the NSB per second
-        nsb_fchange = 1e6 #Hz frequency for the implemented variation of nsb var rate
+        nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
+
+        gain_extraction_method = "baseline",
         
     ):
         """
@@ -119,7 +121,6 @@ class TraceSimulation:
         self.jitter = jitter
         self.debugPlots = debugPlots
         self.transit_time_jitter = transit_time_jitter
-        #self.electronic_noise_amplitude = electronic_noise_amplitude
         self.background_rate_method = background_rate_method
         self.background_rate = background_rate
         self.show_graph = show_graph
@@ -128,6 +129,7 @@ class TraceSimulation:
         self.ampDist_drift = 1.025457559561722
         self.max_nsb_var = max_nsb_var
         self.nsb_fchange = nsb_fchange
+        self.gain_extraction_method = gain_extraction_method
 
 
         if isinstance(timeSpec, str):
@@ -354,18 +356,31 @@ class TraceSimulation:
         if jitter == None:
             jitter = randint.rvs(0, self.oversamp)  # TODO random size?
         stimes = times[jitter :: self.oversamp]
+
+        
         samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape)
         samples = samples.astype(int)
+
+        samples_unpro = signal[jitter :: self.oversamp]
+        samples_unpro = samples_unpro.astype(int)
+
+        print("gain", self.gain)
+        print("signal", signal[int(len(signal)/2)])
+        print("sample", samples[int(len(samples)/2)])
+        print("norm", norm.rvs(self.offset, self.noise, stimes.shape)[int(len(samples)/2)])
 
         #Removing padding for easier readability
         if self.remove_padding:
             extra_padding = 5
             stimes = stimes[int(self.t_pad // 4)+extra_padding:]
-            samples = samples[int(self.t_pad // 4)+extra_padding:]
             stimes = stimes[:len(stimes) - int(self.t_pad // 4) - extra_padding]
+            samples = samples[int(self.t_pad // 4)+extra_padding:]
             samples = samples[:len(samples) - int(self.t_pad // 4) - extra_padding]
 
-        return stimes, samples
+            samples_unpro = samples_unpro[int(self.t_pad // 4)+extra_padding:]
+            samples_unpro = samples_unpro[:len(samples_unpro) - int(self.t_pad // 4) - extra_padding]
+
+        return stimes, samples, samples_unpro
 
     def simulateBackground(self, evts):
         """
@@ -457,7 +472,7 @@ class TraceSimulation:
                 for i, q in enumerate(poisson.rvs(abs(lamda), size=n_steps_var_time)):
                     evts_list.extend([t_min + j*var_time + i * self.t_step] * q)
 
-                print(self.background_rate)
+                #print(self.background_rate)
                 self.background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
                 lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
 
@@ -470,7 +485,7 @@ class TraceSimulation:
 
         return evts
 
-    def FPGA(self, times, signal):
+    def FPGA(self, times, signal, samples_unpro):
 
         bl = signal[0]
         bl_array = []
@@ -484,12 +499,35 @@ class TraceSimulation:
 
             bl_array.append(bl)
 
+        bl_unpro = samples_unpro[0]
+        bl_array_unpro = []
+
+        for i in range(len(times)):
+            if samples_unpro[i] > bl_unpro:
+                bl_unpro += 0.125
+
+            elif samples_unpro[i] < bl_unpro:
+                bl_unpro -= 0.125
+
+            bl_array_unpro.append(bl_unpro)
+
         #need to return both the baseline mean and signal mean
 
         bl_mean = statistics.fmean(bl_array)
         s_mean = statistics.fmean(signal)
 
-        return bl_mean, s_mean, np.std(bl_array-signal)
+        return bl_mean, s_mean, np.std(bl_array-signal), np.std(bl_array_unpro-samples_unpro)
+
+    def extractGain(self, times, sample, signal, bl_mean):
+
+        #method to extract the gain from a signal
+        if self.gain_extraction_method == "baseline":
+            signal = signal - (self.offset + self.background_rate * self.singePE_area)
+
+
+
+
+        return 1
 
 
     def simulateAll(self, peTimes):
@@ -591,11 +629,12 @@ def example_usage():
     s_mean_array = []
     freq = []
     std_dev = []
+    std_dev_unpro = []
     theoretical = []
     ratio_bl_exp = []
 
     #Varying the background rate
-    for i in np.logspace(8.0, 9.3, num=3):
+    for i in np.logspace(6.0, 9.3, num=10):
         esim = TraceSimulation(
             ampSpec="data/spe_R11920-RM_ap0.0002.dat",
             timeSpec="data/bb3_1700v_timing.txt",
@@ -611,32 +650,35 @@ def example_usage():
         eleSig = esim.simulateElectronics(pmtSig)
 
         # adc signal
-        stimes, samples = esim.simulateADC(times, eleSig)
+        stimes, samples, samples_unpro = esim.simulateADC(times, eleSig)
 
-        bl_mean, s_mean, std = esim.FPGA(stimes, samples)
+        bl_mean, s_mean, std, std_unpro = esim.FPGA(stimes, samples, samples_unpro)
 
         bl_mean_array.append(bl_mean)
         s_mean_array.append(s_mean)
         freq.append(i)
         std_dev.append(std)
+        std_dev_unpro.append(std/std_unpro)
         theoretical.append(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset)
         ratio_bl_exp.append(bl_mean/(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset))
+
+        gain_ = esim.extractGain(stimes, samples, samples_unpro, bl_mean)
         
+        if esim.show_graph:
+            plt.figure()
+            plt.title("Simulated ADC output")
+            plt.plot(stimes + esim.plotOffset, samples)
+            plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
+            plt.xlabel("Time/ns")
+            plt.ylabel("ADC output/LSB")
 
-        plt.figure()
-        plt.title("Simulated ADC output")
-        plt.plot(stimes + esim.plotOffset, samples)
-        plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
-        plt.xlabel("Time/ns")
-        plt.ylabel("ADC output/LSB")
-
-        plt.figure()
-        plt.title("Simulated signal")
-        #plt.scatter(evts_br, np.zeros(evts_br.shape))
-        #plt.bar(times, pmtSig)
-        plt.plot(times + esim.plotOffset, eleSig)
-        plt.xlabel("Time/ns")
-        plt.ylabel("Amplitude")
+            plt.figure()
+            plt.title("Simulated signal")
+            #plt.scatter(evts_br, np.zeros(evts_br.shape))
+            #plt.bar(times, pmtSig)
+            plt.plot(stimes + esim.plotOffset, samples_unpro)
+            plt.xlabel("Time/ns")
+            plt.ylabel("Amplitude")
 
 
 
@@ -652,6 +694,7 @@ def example_usage():
     plt.figure()
     plt.title("Baseline stddev")
     plt.plot(freq, std_dev)
+    plt.plot(freq, std_dev_unpro)
     plt.xlabel("f")
     plt.ylabel("mean")
 
