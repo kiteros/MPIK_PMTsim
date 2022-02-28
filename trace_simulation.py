@@ -181,6 +181,7 @@ class TraceSimulation:
                 sum_ += i*step
 
             self.singePE_area = sum_
+            print(sum_)
         else:
             self.pulseShape = pulseShape
         # get distributions of spectra
@@ -364,10 +365,12 @@ class TraceSimulation:
         samples_unpro = signal[jitter :: self.oversamp]
         samples_unpro = samples_unpro.astype(int)
 
+        """
         print("gain", self.gain)
         print("signal", signal[int(len(signal)/2)])
         print("sample", samples[int(len(samples)/2)])
         print("norm", norm.rvs(self.offset, self.noise, stimes.shape)[int(len(samples)/2)])
+        """
 
         #Removing padding for easier readability
         if self.remove_padding:
@@ -625,87 +628,214 @@ def example_usage():
     
     """
 
-    bl_mean_array = []
-    s_mean_array = []
-    freq = []
-    std_dev = []
-    std_dev_unpro = []
-    theoretical = []
-    ratio_bl_exp = []
+    
+    slopes = []
+    gains = []
+    #Varying the gain
+    for j in np.linspace(7, 15, num=4):
 
-    #Varying the background rate
-    for i in np.logspace(6.0, 9.3, num=10):
-        esim = TraceSimulation(
-            ampSpec="data/spe_R11920-RM_ap0.0002.dat",
-            timeSpec="data/bb3_1700v_timing.txt",
-            pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
-            background_rate = i,
-        )
+        bl_mean_array = []
+        s_mean_array = []
+        freq = []
+        std_dev = []
+        std_dev_unpro = []
+        theoretical = []
+        ratio_bl_exp = []
 
-        #we need to add random evts that follow a negative exponential for the background rate
-        evts_br = esim.simulateBackground(evts)
+        gains.append(j)
 
-        # pmt signal
-        times, pmtSig = esim.simulatePMTSignal(evts_br)
-        eleSig = esim.simulateElectronics(pmtSig)
+        #Varying the background rate
+        for i in np.logspace(6.0, 9.0, num=4):
+            print(i)
+            esim = TraceSimulation(
+                ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+                timeSpec="data/bb3_1700v_timing.txt",
+                pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+                background_rate = i,
+                gain=j,
+            )
 
-        # adc signal
-        stimes, samples, samples_unpro = esim.simulateADC(times, eleSig)
+            #we need to add random evts that follow a negative exponential for the background rate
+            evts_br = esim.simulateBackground(evts)
 
-        bl_mean, s_mean, std, std_unpro = esim.FPGA(stimes, samples, samples_unpro)
+            # pmt signal
+            times, pmtSig = esim.simulatePMTSignal(evts_br)
+            eleSig = esim.simulateElectronics(pmtSig)
 
-        bl_mean_array.append(bl_mean)
-        s_mean_array.append(s_mean)
-        freq.append(i)
-        std_dev.append(std)
-        std_dev_unpro.append(std/std_unpro)
-        theoretical.append(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset)
-        ratio_bl_exp.append(bl_mean/(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset))
+            # adc signal
+            stimes, samples, samples_unpro = esim.simulateADC(times, eleSig)
 
-        gain_ = esim.extractGain(stimes, samples, samples_unpro, bl_mean)
-        
-        if esim.show_graph:
-            plt.figure()
-            plt.title("Simulated ADC output")
-            plt.plot(stimes + esim.plotOffset, samples)
-            plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
-            plt.xlabel("Time/ns")
-            plt.ylabel("ADC output/LSB")
+            bl_mean, s_mean, std, std_unpro = esim.FPGA(stimes, samples, samples_unpro)
 
-            plt.figure()
-            plt.title("Simulated signal")
-            #plt.scatter(evts_br, np.zeros(evts_br.shape))
-            #plt.bar(times, pmtSig)
-            plt.plot(stimes + esim.plotOffset, samples_unpro)
-            plt.xlabel("Time/ns")
-            plt.ylabel("Amplitude")
+            bl_mean_array.append(bl_mean)
+            s_mean_array.append(s_mean)
+            freq.append(i)
+            std_dev.append(std*std)
+            std_dev_unpro.append(std_unpro)
+            theoretical.append(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset)
+            ratio_bl_exp.append(bl_mean/(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset))
 
-
-
+            gain_ = esim.extractGain(stimes, samples, samples_unpro, bl_mean)
             
+            if esim.show_graph:
+                plt.figure()
+                plt.title("Simulated ADC output")
+                plt.plot(stimes + esim.plotOffset, samples)
+                plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
+                plt.xlabel("Time/ns")
+                plt.ylabel("ADC output/LSB")
+
+                plt.figure()
+                plt.title("Simulated signal")
+                #plt.scatter(evts_br, np.zeros(evts_br.shape))
+                #plt.bar(times, pmtSig)
+                plt.plot(stimes + esim.plotOffset, samples_unpro)
+                plt.xlabel("Time/ns")
+                plt.ylabel("Amplitude")
+
+        offset = np.polyfit(freq, bl_mean_array, 1)[1]
+        print( "offset", offset)
+
+        
+        plt.figure()
+        plt.title("Baseline mean vs variance")
+        plt.plot(bl_mean_array - offset, std_dev)
+        #plt.plot(freq, std_dev_unpro)
+        plt.xlabel("f")
+        plt.ylabel("mean")
+        
+
+
+        slope = np.polyfit(bl_mean_array - offset, std_dev, 1)[0]
+        print( "slope", slope)
+        slopes.append(slope)
+
+
+
+    """      
     plt.figure()
     plt.title("Baseline shift")
     plt.plot(freq, bl_mean_array)
-    plt.plot(freq, s_mean_array)
-    plt.plot(freq, theoretical)
+    #plt.plot(freq, s_mean_array)
+    #plt.plot(freq, theoretical)
     plt.xlabel("f")
     plt.ylabel("mean")
 
-    plt.figure()
-    plt.title("Baseline stddev")
-    plt.plot(freq, std_dev)
-    plt.plot(freq, std_dev_unpro)
-    plt.xlabel("f")
-    plt.ylabel("mean")
+    
 
     plt.figure()
     plt.title("Ratio")
     plt.plot(freq, ratio_bl_exp)
     plt.xlabel("f")
     plt.ylabel("mean")
-    
+    """
+
     
 
+    plt.figure()
+    plt.title("slopes")
+    plt.plot(gains, slopes)
+    #plt.plot(freq, std_dev_unpro)
+    plt.xlabel("gains")
+    plt.ylabel("slopes")
+    
+    coeff = np.polyfit(gains, slopes, 1)[0]
+    print( "super coeff", coeff)
+    slopes.append(slope)
+
+
+    #now that we have this coeff, we can divide the slope of the baseline to std deviation and obtain the gain
+    #this coefficient is intrisic to the parameters others than nsb rate
+    ##################################################################################3
+
+    slopes = []
+    gains_th = []
+    gains_exp = []
+    #Varying the gain
+    for j in np.linspace(2, 15, num=4):
+
+        bl_mean_array = []
+        s_mean_array = []
+        freq = []
+        std_dev = []
+        std_dev_unpro = []
+        theoretical = []
+        ratio_bl_exp = []
+
+        gains_th.append(j)
+
+        #Varying the background rate
+        for i in np.logspace(5.5, 9.0, num=4):
+            print(i)
+            esim = TraceSimulation(
+                ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+                timeSpec="data/bb3_1700v_timing.txt",
+                pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+                background_rate = i,
+                gain=j,
+            )
+
+            #we need to add random evts that follow a negative exponential for the background rate
+            evts_br = esim.simulateBackground(evts)
+
+            # pmt signal
+            times, pmtSig = esim.simulatePMTSignal(evts_br)
+            eleSig = esim.simulateElectronics(pmtSig)
+
+            # adc signal
+            stimes, samples, samples_unpro = esim.simulateADC(times, eleSig)
+
+            bl_mean, s_mean, std, std_unpro = esim.FPGA(stimes, samples, samples_unpro)
+
+            bl_mean_array.append(bl_mean)
+            s_mean_array.append(s_mean)
+            freq.append(i)
+            std_dev.append(std*std)
+            std_dev_unpro.append(std_unpro)
+            theoretical.append(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset)
+            ratio_bl_exp.append(bl_mean/(esim.singePE_area*esim.gain*esim.background_rate* 1e-9 + esim.offset))
+
+            gain_ = esim.extractGain(stimes, samples, samples_unpro, bl_mean)
+            
+            if esim.show_graph:
+                plt.figure()
+                plt.title("Simulated ADC output")
+                plt.plot(stimes + esim.plotOffset, samples)
+                plt.plot(stimes + esim.plotOffset, np.ones(len(stimes))*bl_mean)
+                plt.xlabel("Time/ns")
+                plt.ylabel("ADC output/LSB")
+
+                plt.figure()
+                plt.title("Simulated signal")
+                #plt.scatter(evts_br, np.zeros(evts_br.shape))
+                #plt.bar(times, pmtSig)
+                plt.plot(stimes + esim.plotOffset, samples_unpro)
+                plt.xlabel("Time/ns")
+                plt.ylabel("Amplitude")
+
+        
+
+        """
+        plt.figure()
+        plt.title("Baseline mean vs variance")
+        plt.plot(bl_mean_array - offset, std_dev)
+        #plt.plot(freq, std_dev_unpro)
+        plt.xlabel("f")
+        plt.ylabel("mean")
+        """
+
+
+        slope = np.polyfit(bl_mean_array - offset, std_dev, 1)[0]
+        gains_exp.append(slope/coeff)
+    
+
+    plt.figure()
+    plt.title("Th vs Exp gain")
+    plt.plot(gains_th, gains_th)
+    plt.plot(gains_th, gains_exp)
+    #plt.plot(freq, std_dev_unpro)
+    plt.xlabel("gain")
+    plt.ylabel("gain")  
     plt.show()
 
 
