@@ -16,7 +16,8 @@ class Pulser:
         pulser_type="PDL800-D",
         step=0.5,
         duration=1e3,
-        pulse_type="none",#"pulsed", "none", "single"
+        pulse_type="pulsed",#"pulsed", "none", "single"
+        freq=20e6#Hz
         ):
 
         self.step = step
@@ -25,7 +26,7 @@ class Pulser:
         if(pulser_type == "PDL800-D"):
             self.pulse_to_pulse_method = "percent", #percent
             self.pulse_to_pulse_jitter = 0.05#2.6ps
-            self.max_frequency = 20e6 #Hz (real between 80 MHz and 31.25 KHz)
+            self.max_frequency = freq #Hz (real between 80 MHz and 31.25 KHz)
             self.pulse_width = 20#ns
             self.average_power = 50e-3 #W
             self.wvl = 600e-9 #wavelenght in m
@@ -152,10 +153,13 @@ class Pulser:
                 #add a new gaussian for each mu
                 signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
 
+            """
             plt.figure()
             plt.title("Laser/LED pulse spectrum")
             plt.plot(tsx, signal)
             plt.xlabel("Pulse")
+            """
+            
 
         else:
             signal = np.zeros(len(tsx))
