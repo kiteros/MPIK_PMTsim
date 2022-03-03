@@ -1,6 +1,1 @@
-- $x + y$
-- $x - y$
-- $x \times y$ 
-- $x \div y$
-- $\dfrac{x}{y}$
-- $\sqrt{x}$
+<img src="https://render.githubusercontent.com/render/math?math=e^{i \pi} = -1">
