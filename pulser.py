@@ -16,7 +16,7 @@ class Pulser:
         pulser_type="PDL800-D",
         step=0.5,
         duration=1e3,
-        pulse_type="pulsed",#"pulsed", "none", "single"
+        pulse_type="none",#"pulsed", "none", "single"
         freq=20e6#Hz
         ):
 

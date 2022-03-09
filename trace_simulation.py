@@ -99,15 +99,16 @@ class TraceSimulation:
         transit_time_jitter = 0.75, #From CTA.cfg, also : 0.64 Obtained from pmt_specs_R11920.cfg
         background_rate_method = "poisson", #poisson, exponential
         #NSB from 0..2GHz
-        background_rate = 1e7, #Hz
+        background_rate = 1e5, #Hz
         show_graph = True,
         no_signal_duration = 1e5, #in ns
         remove_padding = True,
-        max_nsb_var = 1e1, #Maximum variation of the NSB per second
+        max_nsb_var = 0.1, #Maximum variation of the NSB per second
         nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
-        gain_extraction_method = "baseline", #pulse, baseline
+        gain_extraction_method = "blstddev", #pulse, baseline, debug, under_c, blstddev
 
-        slope_method = "odr"
+        slope_method = "odr", #classical
+        show_signal_graphs = False,
         
     ):
         """
@@ -138,6 +139,19 @@ class TraceSimulation:
         self.nsb_fchange = nsb_fchange
         self.gain_extraction_method = gain_extraction_method
         self.slope_method = slope_method
+        self.show_signal_graphs = show_signal_graphs
+        self.bl_underestimation = self.calculateBL_underest(self.background_rate)
+
+        #calculate the poissonian lamda and exp mu
+        #We don't take into account the variation of the lamdas and mu through time for the uncertainties
+
+        self.lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
+
+        self.mu = self.background_rate * 1e-9#From the def E(exp) = 1/mu
+
+        #bl_underestimation depends on the background rate
+
+
 
         #Loading the time spectrum
         if isinstance(timeSpec, str):
@@ -190,8 +204,7 @@ class TraceSimulation:
             self.pulseShape = pulseShape
 
 
-        self.pulseMean, self.pulseStddev = self.statsCalc(self.pulseShape[0], self.pulseShape[1])
-        self.ampMean, self.ampStddev = self.statsCalc(self.ampSpec[0], self.ampSpec[1])
+        
 
         # get distributions of spectra
         sx = self.timeSpec[0]
@@ -200,6 +213,9 @@ class TraceSimulation:
         sx = self.ampSpec[0]
         bins = np.append(sx, sx[-1] + sx[1] - sx[0])
         self.ampDist = rv_histogram((self.ampSpec[1], bins))
+
+        self.pulseMean, self.pulseStddev = self.statsCalc(self.pulseShape[0], self.pulseShape[1], self.ampDist)
+        self.ampMean, self.ampStddev = self.statsCalc(self.ampSpec[0], self.ampSpec[1], self.ampDist)
 
 
         # figures for debugging
@@ -228,10 +244,20 @@ class TraceSimulation:
             sum_ += i*self.t_step # maybe wrong
         return sum_
 
-    def statsCalc(self, times, signals):
+    def calculateBL_underest(self, background_rate):
 
-        mean = signals.mean()
-        stddev = np.std(signals-np.ones(signals.shape)*mean)
+        #measurements :
+
+
+
+        return math.log10(background_rate) * 0.4848922809933432 -1.4096232853103452
+
+
+    def statsCalc(self, times, signals, dist):
+
+        mean = dist.mean()
+        #stddev = np.std(signals-np.ones(signals.shape)*mean)
+        stddev = math.sqrt(dist.var())
         return mean, stddev
 
     def simulatePETimes(self, npe=10, t_mu=0, t_sig=300):
@@ -332,12 +358,18 @@ class TraceSimulation:
         tuple of ndarray
                 times in ns and simulated signal
         """
-
+        tot_pe = sum(k_evts)
+        #print(tot_pe)
         
 
         # make discrete times
-        t_min = peTimes.min() - self.t_pad
-        t_max = peTimes.max() + self.t_pad
+        if len(peTimes) > 0:
+            t_min = peTimes.min() - self.t_pad
+            t_max = peTimes.max() + self.t_pad
+        else :
+            t_min = (-1) * self.t_pad
+            t_max = self.no_signal_duration + self.t_pad
+
         times = np.arange((int(t_max - t_min) / self.t_step)) * self.t_step + t_min
         # make signal
         signal = np.zeros(times.shape)
@@ -346,6 +378,16 @@ class TraceSimulation:
 
         #We need a way to know the number of Pe with same time
         #This information is in k_evts, need to be careful with indexes
+
+        #self.ampStddev = 1e-5
+        self.n_steps = (t_max - t_min ) / self.t_step
+
+        #print("ampstdev", self.ampStddev)
+        #print("mean", self.ampMean)
+
+        #we take the mean value for the amp_rvs
+        self.uncertainty_averaged = self.ampStddev * self.lamda + self.ampMean*math.sqrt(self.lamda)
+
 
 
         if self.background_rate_method == "poisson":
@@ -356,7 +398,16 @@ class TraceSimulation:
 
                 t += self.timeDist.rvs()
                 signal[int((t - t_min) / self.t_step)] += amp_rvs
-                uncertainty[int((t - t_min) / self.t_step)] = self.ampStddev * k_evts[i] + amp_rvs*math.sqrt(k_evts[i])
+
+                #below is the uncertainty in the error sense
+                uncertainty[int((t - t_min) / self.t_step)] = self.uncertainty_averaged
+
+                #below uncertainty is standard expected statistical fluctuation
+                #print((tot_pe * self.singePE_area) / (t_max - t_min))
+                #uncertainty[int((t - t_min) / self.t_step)] = (tot_pe * self.singePE_area) / (t_max - t_min)
+
+        elif self.background_rate_method == "exponential":
+            print("todo")
                 
         return times, signal, uncertainty
 
@@ -404,8 +455,9 @@ class TraceSimulation:
         
         samples = signal[jitter :: self.oversamp] * self.gain + norm.rvs(self.offset, self.noise, stimes.shape)
         uncertainty_sampled = uncertainty[jitter :: self.oversamp] * self.gain + self.noise #Only the stddev of noise impacts
+        #print(uncertainty_sampled, self.noise)
 
-        samples = samples.astype(int)
+        samples = samples.astype(int) #numpy round/add 0.5 before
 
         samples_unpro = signal[jitter :: self.oversamp]
         samples_unpro = samples_unpro.astype(int)
@@ -448,11 +500,7 @@ class TraceSimulation:
         
         """
 
-        #calculate the poissonian lamda and exp mu
-
-        lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
-
-        mu = self.background_rate * 1e-9#From the def E(exp) = 1/mu
+        
 
         #Implement change of nsb per second
         var_time = (1/self.nsb_fchange) * 1e9 #ns
@@ -529,7 +577,7 @@ class TraceSimulation:
             for j in range(n_intervals):
                 #recalculate the lamda each time
 
-                for i, q in enumerate(poisson.rvs(abs(lamda), size=n_steps_var_time)):
+                for i, q in enumerate(poisson.rvs(abs(self.lamda), size=n_steps_var_time)):
                     # * operator create q times the same list
                     evts_list.extend([t_min + j*var_time + i * self.t_step] * q)
                     k_evts.extend([q] * q)
@@ -539,10 +587,10 @@ class TraceSimulation:
 
                 #print(self.background_rate)
                 self.background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
-                lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
+                self.lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
 
             #fill the last interval
-            for i, q in enumerate(poisson.rvs(abs(lamda), size=int((t_max - n_intervals*var_time) // self.t_step))):
+            for i, q in enumerate(poisson.rvs(abs(self.lamda), size=int((t_max - n_intervals*var_time) // self.t_step))):
                 evts_list.extend([t_min + var_time*n_intervals + i * self.t_step] * q)
                 k_evts.extend([q] * q)
 
@@ -550,17 +598,30 @@ class TraceSimulation:
         
         return evts, k_evts
 
+
+    def stddev(self, arr, ref, mean_signal):
+
+        deviations = [(mean_signal + x - ref) ** 2 for x in arr]
+        deviations = sum(deviations) / len(arr)
+
+        return math.sqrt(deviations)
+
     def FPGA(self, times, signal, samples_unpro, uncert):
 
         bl = signal[0]
         bl_array = []
+        uncert_bl_mean_R = 0 #region method
 
         for i in range(len(times)):
             if signal[i] > bl:
-                bl += 0.125
+                bl += 2
 
             elif signal[i] < bl:
-                bl -= 0.125
+                bl -= 2
+
+            if bl > signal[i] - uncert[i] and bl < signal[i] + uncert[i]:
+                #bl is inside the uncertainty region
+                uncert_bl_mean_R += 0.125
 
             bl_array.append(bl)
 
@@ -582,12 +643,38 @@ class TraceSimulation:
 
         uncert_bl_mean = statistics.fmean(uncert)
 
+        ###need to make a new algorithm for the uncertainty of bl mean.
+        #F.E increase the uncertainty of bl by 0.125 if it is inside the uncertainty region
+
+        #print("uncert", uncert)
+
         #print(uncert_bl_mean)
 
         bl_mean = statistics.fmean(bl_array)
         s_mean = statistics.fmean(signal)
 
-        return bl_mean, s_mean, np.std(bl_array-signal), np.std(bl_array_unpro-samples_unpro), uncert_bl_mean
+        
+
+        stddev_uncert_baseline = np.std(bl_array-uncert)
+        stddev_uncert_baseline_mean = self.stddev(arr=uncert, ref=bl_mean, mean_signal=s_mean)
+        stddev_uncert_mean = uncert[0]#self.stddev(arr=uncert, ref=s_mean, mean_signal=s_mean) ##rightest one
+
+        stddev_baseline = np.std(bl_array) #to export
+        stddev_baseline_mean = np.std(np.ones(len(signal))*bl_mean-signal)
+        stddev_mean = np.std(signal) #rightest one
+
+        #Compare uncertainty stddev with stddev of signal
+        
+        print("stddev_uncert_baseline", stddev_uncert_baseline)
+        print("stddev_uncert_baseline_mean", stddev_uncert_baseline_mean)
+        print("stddev_uncert_mean", stddev_uncert_mean)
+
+        print("stdev baseline", stddev_baseline)
+        print("stdev baseline mean", stddev_baseline_mean)
+        print("stdev mean", stddev_mean)
+        
+
+        return bl_mean+self.bl_underestimation, s_mean, stddev_baseline, np.std(bl_array_unpro-samples_unpro), uncert_bl_mean, bl_array, stddev_uncert_mean, stddev_mean
 
 
     def simulateAll(self, peTimes):
