@@ -8,6 +8,7 @@ from pulser import Pulser
 import statistics
 import scipy.integrate as integrate
 import math 
+import sys
 
 
 
@@ -88,7 +89,7 @@ class TraceSimulation:
         noise=0.8, #ADC noise : 0.5 - 1.5 LSB
 
         #Gain from 2 to 15 LSB
-        gain=10,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
+        gain=15,# in fadc_amplitude in CTA.cfg; ALSO : gain=7.5e5 from CTA-ULTRA5-small-4m-dc.cfg
         jitter=None,
         debugPlots=False,
         timeSpec=None,
@@ -105,9 +106,9 @@ class TraceSimulation:
         remove_padding = True,
         max_nsb_var = 0.1, #Maximum variation of the NSB per second
         nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
-        gain_extraction_method = "blstddev", #pulse, baseline, debug, under_c, blstddev
+        gain_extraction_method = "bl_shift", #pulse, baseline, debug, under_c, blstddev, bl_shift
 
-        slope_method = "odr", #classical
+        slope_method = "odr", #classical, odr
         show_signal_graphs = False,
         
     ):
@@ -141,6 +142,8 @@ class TraceSimulation:
         self.slope_method = slope_method
         self.show_signal_graphs = show_signal_graphs
         self.bl_underestimation = self.calculateBL_underest(self.background_rate)
+
+        np.set_printoptions(threshold=sys.maxsize)
 
         #calculate the poissonian lamda and exp mu
         #We don't take into account the variation of the lamdas and mu through time for the uncertainties
@@ -374,7 +377,14 @@ class TraceSimulation:
         # make signal
         signal = np.zeros(times.shape)
 
-        uncertainty = np.zeros(times.shape)
+        #self.uncertainty_averaged = self.ampStddev * self.lamda + self.ampMean*math.sqrt(self.lamda)
+        self.uncertainty_averaged = self.lamda * self.ampMean
+        #print("div", self.oversamp/self.t_step)
+        #print("selfpe", self.singePE_area)
+        self.uncertainty_coeff = 8
+        self.uncertainty_averaged = self.uncertainty_averaged #* self.uncertainty_coeff 
+
+        uncertainty = np.ones(times.shape)*self.uncertainty_averaged
 
         #We need a way to know the number of Pe with same time
         #This information is in k_evts, need to be careful with indexes
@@ -386,7 +396,7 @@ class TraceSimulation:
         #print("mean", self.ampMean)
 
         #we take the mean value for the amp_rvs
-        self.uncertainty_averaged = self.ampStddev * self.lamda + self.ampMean*math.sqrt(self.lamda)
+        
 
 
 
@@ -400,7 +410,7 @@ class TraceSimulation:
                 signal[int((t - t_min) / self.t_step)] += amp_rvs
 
                 #below is the uncertainty in the error sense
-                uncertainty[int((t - t_min) / self.t_step)] = self.uncertainty_averaged
+                #uncertainty[int((t - t_min) / self.t_step)] = self.uncertainty_averaged
 
                 #below uncertainty is standard expected statistical fluctuation
                 #print((tot_pe * self.singePE_area) / (t_max - t_min))
@@ -411,7 +421,7 @@ class TraceSimulation:
                 
         return times, signal, uncertainty
 
-    def simulateElectronics(self, signal, uncertainty):
+    def simulateElectronics(self, signal, uncertainty, times):
         """
         Simulates effect of electronics on PMT signal.
 
@@ -426,10 +436,30 @@ class TraceSimulation:
                 simulated signal
         """
 
-        #We can convolve with a constant, see overleaf for equation
-        uncertainty = np.convolve(signal, self.pulseStddev, "same") + np.convolve(uncertainty, self.pulseShape[1], "same")
+        ####check that everything is right before doing the convolution
 
-        return np.convolve(signal, self.pulseShape[1], "same"), uncertainty
+
+
+        #print(signal)
+
+        if self.show_signal_graphs:
+
+            plt.figure()
+            plt.plot(times, signal, label="signal")
+            plt.plot(times, uncertainty, label="uncertainty")
+            #plt.scatter(np.arange(0,self.no_signal_duration, self.t_step), np.zeros(np.arange(0,self.no_signal_duration, self.t_step).shape),  label="step")
+            plt.legend(loc="upper left")
+            plt.show()
+
+        #We can convolve with a constant, see overleaf for equation
+        #uncertainty = np.convolve(signal, self.pulseStddev, "same") + np.convolve(uncertainty, self.pulseShape[1], "same")
+        #uncertainty = np.repeat(uncertainty[0]*self.singePE_area, len(uncertainty))  #np.convolve(uncertainty, self.pulseShape[1], "same")
+
+        #uncertainty = uncertainty[0] * self.singePE_area + self.ampMean * self.pulseStddev * self.lamda * self.no_signal_duration * 1e-9
+
+        uncertainty = np.sqrt(np.convolve(uncertainty, self.pulseShape[1], "same"))
+
+        return np.convolve(signal, self.pulseShape[1], "same"), uncertainty#np.repeat(uncertainty, len(signal))
 
     def simulateADC(self, times, signal, uncertainty):
         """
@@ -483,6 +513,25 @@ class TraceSimulation:
             uncertainty_sampled = uncertainty_sampled[int(self.t_pad // 4)+extra_padding:]
             uncertainty_sampled = uncertainty_sampled[:len(uncertainty_sampled) - int(self.t_pad // 4) - extra_padding]
 
+        if self.show_signal_graphs:
+            plt.figure()
+            plt.plot(stimes, samples, label="signal")
+            plt.plot(stimes, uncertainty_sampled+np.mean(samples), label="uncertainty on signal")
+            plt.plot(stimes, np.repeat(np.mean(samples), uncertainty_sampled.shape), label="mean signal")
+            plt.plot(stimes, np.repeat(np.std(samples), uncertainty_sampled.shape)+np.mean(samples), label="stddev signal")
+            #plt.scatter(np.arange(0,self.no_signal_duration, self.oversamp), np.zeros(np.arange(0,self.no_signal_duration, self.oversamp).shape),  label="step")
+            plt.legend(loc="upper left")
+            plt.show()
+
+        ####print the signal : 
+        #stimes samples uncertainty_samples
+
+        with open('exports/B='+str(self.background_rate)+';G='+str(self.gain)+';V='+str(self.max_nsb_var)+';N='+str(self.noise)+'.txt', 'w') as f:
+            for j in range(len(stimes)):
+                f.write(str(stimes[j]) + " " + str(samples[j]) + " " + str(uncertainty_sampled[j]))
+                f.write("\n")
+
+        ##Here uncertainty sampled is just a repetition of the same uncertainty
         return stimes, samples, samples_unpro, uncertainty_sampled
 
     def simulateBackground(self, evts):
@@ -551,7 +600,7 @@ class TraceSimulation:
 
         elif self.background_rate_method == "poisson":
 
-
+            new_background_rate = self.background_rate
 
             if len(evts) > 0:
                 t_min = evts.min() - self.t_pad
@@ -586,8 +635,8 @@ class TraceSimulation:
                     #uncertainty.append(q*self.ampStddev+self.ampMean*math.sqrt(lamda)) #TODO : self.ampMean should depend on the actual value of ampdist.rvs, not constant
 
                 #print(self.background_rate)
-                self.background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
-                self.lamda = self.t_step * self.background_rate * 1e-9#From the def E(poisson) = lamda
+                new_background_rate += norm.rvs(0, ((self.max_nsb_var * var_time * bg_ref)/(1e9))/(2*math.sqrt(2*math.log(2))), 1)[0]
+                self.lamda = self.t_step * new_background_rate * 1e-9#From the def E(poisson) = lamda
 
             #fill the last interval
             for i, q in enumerate(poisson.rvs(abs(self.lamda), size=int((t_max - n_intervals*var_time) // self.t_step))):
@@ -641,7 +690,22 @@ class TraceSimulation:
 
         #For now (needs to be improved), the uncertainty of bl mean is the average of uncertainties
 
+        #1.43...
         uncert_bl_mean = statistics.fmean(uncert)
+        print("before", uncert_bl_mean)
+
+        ##recalculate the right uncert on bl from the smoothing coefficient
+
+        self.smoothing_coeff_offset = np.float32(-0.14140167346889987) #maybe should depend on the the gain
+
+        transformed_signal = math.log10(uncert_bl_mean) + (self.smoothing_coeff_offset)
+        transformed_signal = (10 ** transformed_signal) 
+
+        transformed_signal = transformed_signal / math.sqrt(len(uncert))
+
+        print("after", transformed_signal)
+
+
 
         ###need to make a new algorithm for the uncertainty of bl mean.
         #F.E increase the uncertainty of bl by 0.125 if it is inside the uncertainty region
@@ -655,26 +719,40 @@ class TraceSimulation:
 
         
 
-        stddev_uncert_baseline = np.std(bl_array-uncert)
-        stddev_uncert_baseline_mean = self.stddev(arr=uncert, ref=bl_mean, mean_signal=s_mean)
-        stddev_uncert_mean = uncert[0]#self.stddev(arr=uncert, ref=s_mean, mean_signal=s_mean) ##rightest one
+        #stddev_uncert_baseline = np.std(bl_array-uncert)
+        #stddev_uncert_baseline_mean = np.stddev(arr=uncert, ref=bl_mean, mean_signal=s_mean)
+        stddev_uncert_mean = statistics.fmean(uncert) #self.stddev(arr=uncert, ref=s_mean, mean_signal=s_mean) ##rightest one
 
         stddev_baseline = np.std(bl_array) #to export
-        stddev_baseline_mean = np.std(np.ones(len(signal))*bl_mean-signal)
+        #stddev_baseline_mean = np.std(np.ones(len(signal))*bl_mean-signal)
         stddev_mean = np.std(signal) #rightest one
 
+        #We want to know the relationship between stddev_baseline and stddev_mean
+
+
         #Compare uncertainty stddev with stddev of signal
+        #Equivalent to compare stddev_baseline and stddev_mean
         
-        print("stddev_uncert_baseline", stddev_uncert_baseline)
-        print("stddev_uncert_baseline_mean", stddev_uncert_baseline_mean)
-        print("stddev_uncert_mean", stddev_uncert_mean)
+        #print("stddev_uncert_baseline", stddev_uncert_baseline)
+        #print("stddev_uncert_baseline_mean", stddev_uncert_baseline_mean)
+        #print("stddev_uncert_mean", stddev_uncert_mean)
 
-        print("stdev baseline", stddev_baseline)
-        print("stdev baseline mean", stddev_baseline_mean)
-        print("stdev mean", stddev_mean)
+        #print("stdev baseline", stddev_baseline)
+        #print("stdev baseline mean", stddev_baseline_mean)
+        #print("stdev mean", stddev_mean)
+
+
+        """OUTPUTS
+            1) baseline mean, +self.bl_underestimation can be added¨, it is bl_mean
+            2) Signal mean
+            3) standard deviation baseline
+            4) This is wrong and needs to be changed
+            5) Transformed signal is the uncertainty output of the bl for a given signal uncertainty (bl_mean_uncertainty)
+
+        """
         
 
-        return bl_mean+self.bl_underestimation, s_mean, stddev_baseline, np.std(bl_array_unpro-samples_unpro), uncert_bl_mean, bl_array, stddev_uncert_mean, stddev_mean
+        return bl_mean, s_mean, stddev_baseline, np.std(bl_array_unpro-samples_unpro), transformed_signal, bl_array, stddev_uncert_mean, stddev_mean
 
 
     def simulateAll(self, peTimes):
