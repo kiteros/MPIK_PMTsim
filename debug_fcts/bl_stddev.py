@@ -121,22 +121,23 @@ class BL_stddev:
 
 		plt.figure()
 
-		
+		"""
 		plt.plot(br_rate_log, log_fit_bl, label="bl fit")
 		plt.plot(br_rate_log, log_fit_signal, label="stddev_mean fit")
 
 		plt.plot(br_rate_log, uncertainty_stddev_log, label='uncert')
 		plt.plot(br_rate_log, bl_stddev_log, label='bl')
 		plt.plot(br_rate_log, stddev_mean_e_log, label='stddev mean')
+		"""
 		
 		#plt.plot(br_rate_log, transformed_signal, label='transformed signal')
 
-		"""
+		
 		plt.plot(br_rate, uncertainty_stddev, label='uncert')
 		plt.plot(br_rate, bl_stddev, label='bl')
 		plt.plot(br_rate, stddev_mean_e, label='stddev mean')
 		plt.plot(br_rate, transformed_signal, label='transformed signal')
-		"""
+		
 		
 		plt.legend(loc='upper left')
 		plt.show()

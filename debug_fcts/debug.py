@@ -27,13 +27,23 @@ class Debug:
         plt.figure()
         plt.title("Simulated ADC output")
 
-        for i in range(5):
+
+        #Vary everything with respect to everything
+
+
+        stddev_signal = []
+        stddev_baseline = []
+        signal_mean = []
+        baseline_mean = []
+        noise = []
+        for i in np.linspace(0.0, 150, num=7):
             #Repeat and generate n different signals with same uncertainties
 
             esim_init = TraceSimulation(
                 ampSpec="data/spe_R11920-RM_ap0.0002.dat",
                 timeSpec="data/bb3_1700v_timing.txt",
                 pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+                noise=i,
             )
 
             #we need to add random evts that follow a negative exponential for the background rate
@@ -47,41 +57,134 @@ class Debug:
             eleSig, uncertainty_ele = esim_init.simulateElectronics(pmtSig, uncertainty_pmt, times)
 
             # adc signal
-            stimes, samples, samples_unpro, uncertainty_sampled = esim_init.simulateADC(times, eleSig, uncertainty_ele)
+            stimes, samples, samples_unpro, uncertainty_sampled = esim_init.simulateADC(times, eleSig, uncertainty_ele,1)
 
             bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array,stddev_uncert_mean, stddev_mean = esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
 
             th_bg = np.ones(len(stimes))*(esim_init.singePE_area*esim_init.gain*esim_init.background_rate* 1e-9 + esim_init.offset)
-            
-            plt.plot(stimes + esim_init.plotOffset, samples, label=i)
-            plt.plot(stimes + esim_init.plotOffset, np.ones(len(stimes))*bl_mean)
-            #plt.plot(stimes + esim.plotOffset, bl_array)
-            plt.plot(stimes + esim_init.plotOffset, th_bg)
-            plt.fill_between(stimes + esim_init.plotOffset, [a - b for a, b in zip(th_bg, uncertainty_sampled)], [a + b for a, b in zip(th_bg, uncertainty_sampled)], alpha=0.2)
-            
-            
-            """
-            plt.figure()
-            plt.title("Electronic signal")
-            #plt.scatter(evts_br, np.zeros(evts_br.shape))
-            #plt.bar(times, pmtSig)
-            plt.plot(times, eleSig, label=i)
-            plt.fill_between(times, [a - b for a, b in zip(eleSig, uncertainty_ele)], [a + b for a, b in zip(eleSig, uncertainty_ele)], alpha=0.2)
-            plt.xlabel("Time/ns")
-            plt.ylabel("Amplitude")
-            plt.legend(loc="upper left")
+                
+            stddev_signal.append(stddev_mean)
+            stddev_baseline.append(std)
+            signal_mean.append(s_mean)
+            baseline_mean.append(bl_mean)
+            noise.append(i)
 
-            plt.figure()
-            plt.title("PMT signal")
-            #plt.scatter(evts_br, np.zeros(evts_br.shape))
-            #plt.bar(times, pmtSig)
-            plt.plot(times, pmtSig,label=i)
-            plt.fill_between(times, [a - b for a, b in zip(pmtSig, uncertainty_pmt)], [a + b for a, b in zip(pmtSig, uncertainty_pmt)], alpha=0.2)
-            plt.xlabel("Time/ns")
-            plt.ylabel("Amplitude")
-            plt.legend(loc="upper left")
-            """
-        plt.xlabel("Time/ns")
-        plt.ylabel("ADC output/LSB")
+        plt.figure()
+
+        plt.plot(noise, stddev_baseline, label="baseline")
+        plt.plot(noise, stddev_signal, label="signal")
+        plt.plot(noise, signal_mean, label="signal_mean")
+        plt.plot(noise, baseline_mean, label="baseline_mean")
+
+        plt.xlabel("noise")
+        plt.ylabel("stddev")
         plt.legend(loc="upper left")
+
+        #################################
+        stddev_signal = []
+        stddev_baseline = []
+        signal_mean = []
+        baseline_mean = []
+        bg = []
+        for i in np.linspace(10**2.0, 10**9, num=5):
+            #Repeat and generate n different signals with same uncertainties
+
+            esim_init = TraceSimulation(
+                ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+                timeSpec="data/bb3_1700v_timing.txt",
+                pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+                background_rate=i,
+            )
+
+            #we need to add random evts that follow a negative exponential for the background rate
+
+            evts_br, k_evts = esim_init.simulateBackground(evts)
+
+            # pmt signal
+            times, pmtSig, uncertainty_pmt = esim_init.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+
+
+            eleSig, uncertainty_ele = esim_init.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+            # adc signal
+            stimes, samples, samples_unpro, uncertainty_sampled = esim_init.simulateADC(times, eleSig, uncertainty_ele, 1)
+
+            bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array,stddev_uncert_mean, stddev_mean = esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
+
+            th_bg = np.ones(len(stimes))*(esim_init.singePE_area*esim_init.gain*esim_init.background_rate* 1e-9 + esim_init.offset)
+                
+            stddev_signal.append(stddev_mean)
+            stddev_baseline.append(std)
+
+            signal_mean.append(s_mean)
+            baseline_mean.append(bl_mean)
+            bg.append(i)
+
+        plt.figure()
+
+        plt.plot(bg, stddev_baseline, label="baseline")
+        plt.plot(bg, stddev_signal, label="signal")
+
+        plt.plot(bg, signal_mean, label="signal_mean")
+        plt.plot(bg, baseline_mean, label="baseline_mean")
+
+        plt.xlabel("bacgrkound rate")
+        plt.ylabel("stddev")
+        plt.legend(loc="upper left")
+
+
+
+        #################################
+        stddev_signal = []
+        stddev_baseline = []
+        signal_mean = []
+        baseline_mean = []
+        gain = []
+        for i in np.linspace(2, 15, num=5):
+            #Repeat and generate n different signals with same uncertainties
+
+            esim_init = TraceSimulation(
+                ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+                timeSpec="data/bb3_1700v_timing.txt",
+                pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+                gain=i,
+            )
+
+            #we need to add random evts that follow a negative exponential for the background rate
+
+            evts_br, k_evts = esim_init.simulateBackground(evts)
+
+            # pmt signal
+            times, pmtSig, uncertainty_pmt = esim_init.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+
+
+            eleSig, uncertainty_ele = esim_init.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+            # adc signal
+            stimes, samples, samples_unpro, uncertainty_sampled = esim_init.simulateADC(times, eleSig, uncertainty_ele, 1)
+
+            bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array,stddev_uncert_mean, stddev_mean = esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
+
+            th_bg = np.ones(len(stimes))*(esim_init.singePE_area*esim_init.gain*esim_init.background_rate* 1e-9 + esim_init.offset)
+                
+            stddev_signal.append(stddev_mean)
+            stddev_baseline.append(std)
+
+            signal_mean.append(s_mean)
+            baseline_mean.append(bl_mean)
+            gain.append(i)
+
+        plt.figure()
+
+        plt.plot(gain, stddev_baseline,label="baseline")
+        plt.plot(gain, stddev_signal, label="signal")
+
+        
+        plt.plot(gain, signal_mean, label="signal_mean")
+        plt.plot(gain, baseline_mean, label="baseline_mean")
+
+        plt.xlabel("gain")
+        plt.ylabel("stddev")
+        plt.legend(loc="upper left")
+
         plt.show()

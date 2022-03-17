@@ -31,15 +31,15 @@ class GainCalculator:
         gain_min=2,
         gain_max=15,
 
-        n_train_1=3,#minimum 3 point for covariance
-        n_train_2=3,
+        n_train_1=5,#minimum 3 point for covariance
+        n_train_2=5,
 
-        n_exp_1=3,
-        n_exp_2=3,
+        n_exp_1=5,
+        n_exp_2=5,
 
-        bk_min=7.0,
+        bk_min=2.0,
         bk_max=9.0, #Both in log scale
-        nsb_var = 0.1,
+        nsb_var = 0.0,
 
         load_files = True, 
         ):
@@ -69,14 +69,13 @@ class GainCalculator:
         self.nsb_var = nsb_var
         self.load_files = load_files
 
-        ##n_exp not used so far
-
-        self.nb_lines = 1
+        self.nb_lines = 10
 
         print("estimated time", (self.nb_lines*self.n_train_1*self.n_train_2/12)%60, "minutes")
 
 
     def line_1(self, x, a, b):
+        #Line function for fit
         return a * x + b
 
     def line_(self, p, x):
@@ -89,19 +88,21 @@ class GainCalculator:
     def extract_gain(self):
 
 
-        #ampSpec = np.loadtxt("data/bb3_1700v_spe.txt", unpack=True)
-
-        #Create a pulser class
-        
-
         if self.esim_init.gain_extraction_method == "baseline":
+            """
+            baseline method
+            ---------
+            Extract the relationship between baseline shift and signal standard deviation to deduce a coefficient useful to extract gain
+                
+            """
 
-            #Baseline.execute(self.esim_init, gain_min=2, gain_max=15)
+            #Baseline.execute(self.esim_init, gain_min=2, gain_max=15) ###need to relocate
             pulse = Pulser(step=self.esim_init.t_step, pulse_type="none")
             evts = pulse.generate_all()
 
 
             gains = np.arange(self.gain_min, self.gain_max + 1, 1)
+
             fig, ax = plt.subplots()
             ax.set_title("Th vs Exp gain")
             ax.plot(gains, gains)
@@ -111,14 +112,18 @@ class GainCalculator:
             noises = []
             exp_gain_unc = []
 
+            line_tracker = 1
 
-            for i in np.linspace(0.5, 0.5, num=self.nb_lines):
+            last_val = []
+
+
+            for i in np.linspace(1.0, 1.0, num=self.nb_lines):
 
                 print(i)
                 noises.append(i)
 
                 # training
-                coeff, coeff_uncertainty, offset_coeff = self.calculate_coeff(evts=evts, noi=i)
+                coeff, coeff_uncertainty, offset_coeff = self.calculate_coeff(evts=evts, noi=i, line_nb_=line_tracker)
 
                 # experience
                 gains, slopes, slopes_uncertainties = self.loop_gain_bl(
@@ -131,6 +136,7 @@ class GainCalculator:
                     bk_max=self.bk_max,
                     nsb_var=self.nsb_var,
                     noise_=i,
+                    line_nb=line_tracker
                 )
 
                 # gains, slopes, slopes_uncertainties = self.loop_gain_bl(evts=evts, gain_min=2, gain_max=2,
@@ -146,35 +152,75 @@ class GainCalculator:
                     exp_gain_unc.append(unc_s / coeff + (q / (coeff * coeff)) * coeff_uncertainty)
                 ax.plot(gains, exp_gain - offset_coeff, label="exp")
 
-                # plt.errorbar(gains, exp_gain, yerr=exp_gain_unc, label=i)
-                # print(exp_gain)
+                line_tracker += 1
 
-                # gain_2.append(exp_gain[0])
+                new_gain_exp = exp_gain - offset_coeff
+                last_val.append(new_gain_exp[-1])
 
             ax.fill_between(gains, [a - b for a, b in zip(gains, exp_gain_unc)],[a + b for a, b in zip(gains, exp_gain_unc)],alpha=0.2)
             ax.legend(loc="upper left")
-
-            # plt.figure()
-            # plt.plot(noises, gain_2)
+            #now calculate the deviation
 
             plt.show()
 
+            plt.figure()
+            plt.scatter(last_val, np.zeros(len(last_val)))
+            plt.hist(last_val, density=True, bins=10)
+            plt.plot()
+
+            plt.show()
+
+
+
+
         elif self.esim_init.gain_extraction_method == "pulse":
+            """
+            pulse method
+            ---------
+            Extract the relationship from pulse to pulse jitter (TODO)
+                
+            """
             Pulse.execute(self.esim_init)
 
         elif self.esim_init.gain_extraction_method == "debug":
+            """
+            debug method
+            ---------
+            Simple debug method to plot all the relationship between parameters
+                
+            """
 
             Debug.execute(self.esim_init)
         
         elif self.esim_init.gain_extraction_method == "under_c":
+            """
+            uncer c method
+            ---------
+            Plot the uncerestimation of the gain from theoretical gain on just one axis : Useful to readujust the slopes when there is an unwanted offset
+                
+            """
 
             Under_c.execute(self.esim_init)
 
         elif self.esim_init.gain_extraction_method == "bl_shift":
+            
+            """
+            baseline shift method
+            ---------
+            Plot the relationship betwen the variance and baseline means : mostly useful for debugging
+                
+            """
 
             BL_shift.execute(self.esim_init)
                     
         elif self.esim_init.gain_extraction_method == "blstddev":
+
+            """
+            blstddev method
+            ---------
+            Useful to plot uncertainty vs standard deviation for crosschecks
+                
+            """
 
             BL_stddev.execute(self.esim_init)
 
@@ -183,28 +229,44 @@ class GainCalculator:
 
     
 
-    def calculate_coeff(self, evts, noi):
+    def calculate_coeff(self, evts, noi, line_nb_):
+        """
+        Calculate coeff method : derives the intrisic coefficient between true gain and slopes for this PMT
+        The function acts as a training to derive the coeff which is then used to extract gain from any trace
+
+        Parameters
+        ----------
+        evts - array_like
+                PE time events coming from the pulser
+        noi - float
+                ADC noise
+        line_nb - int
+                index of the line being simulated. Useful to not reload the same trace twice
+
+        Returns
+        -------
+        coeff
+                intrisic coefficient
+        coeff_ucnertainty
+                uncertainty on said coefficient
+        offset_coeff
+                Potential offset when deriving the coefficient
+        """
+
         #first extract the slopes of from the different gains
         gains, slopes, slopes_uncertainties = self.loop_gain_bl(evts=evts, gain_min=self.gain_min, gain_max=self.gain_max, 
-                    n1=self.n_train_1, n2=self.n_train_2, bk_min=self.bk_min, bk_max=self.bk_max, nsb_var=self.nsb_var, noise_=noi)
+                    n1=self.n_train_1, n2=self.n_train_2, bk_min=self.bk_min, bk_max=self.bk_max, nsb_var=self.nsb_var, noise_=noi, line_nb=line_nb_)
 
 
         #Make sure we have train for the coeff (the bigger, the more precise)
-
-
         #Then calculate the coefficient
-        #coeff = np.polyfit(gains, slopes, 1)[0]
 
         plt.figure()
         plt.plot(gains, slopes, 'bo')
         plt.fill_between(gains, [a - b for a, b in zip(slopes, slopes_uncertainties)], [a + b for a, b in zip(slopes, slopes_uncertainties)], alpha=0.2)
 
-
-
         ####Here we have an error on coeff
-
         popt, pcov = curve_fit(self.line_1, gains, slopes, sigma=slopes_uncertainties)
-
 
         coeff = popt[0]
         offset_coeff = popt[1]
@@ -213,20 +275,54 @@ class GainCalculator:
         plt.plot(gains, [x * coeff + offset_coeff for x in gains])
 
 
-
         return coeff, coeff_uncertainty, offset_coeff
 
     
 
-    def loop_gain_bl(self, evts, gain_min, gain_max, n1, n2, bk_min, bk_max, nsb_var, noise_=1.0):
+    def loop_gain_bl(self, evts, gain_min, gain_max, n1, n2, bk_min, bk_max, nsb_var, noise_=1.0, line_nb=1):
+        """
+        Loops over both gains and background rate to extact the slopes
 
-        #print(evts)
+        Parameters
+        ----------
+        evts - array_like
+                Pe times coming from the pulser
+        gain_min - float
+                Minimum gain from which to perform the loop
+        gain_max - float
+                Maxmimum gain from which to perform the loop
+        n1 - int
+                number of loop for gain space
+        n2 - int   
+                number of loop for background rate space
+        bk_min - float
+                minimum background rate from which to perform the loop
+        bk_max - float
+                maximum background rate from which to perform the loop
+        nsb_var - float
+                Variation of the background rate in percent per second
+        noise_ - float
+                stddev of the ADC noise
+        line_nb - int
+                index of the current line
+
+        Returns
+        -------
+        gains - array_like
+                True gains
+        slopes - array_like
+                Slopes of stddev vs bl_shift for gains
+        slopes_uncertainties - array_like
+                uncertainties of said slopes
+        """
+
 
         slopes = []
         slopes_uncertainties = []
         gains = []
-        #Varying the gain
+
         plt.figure()
+
         for j in np.linspace(gain_min, gain_max, num=n1):
 
             bl_mean_array = []
@@ -241,8 +337,6 @@ class GainCalculator:
             gains.append(j)
 
             
-
-
             #Varying the background rate
             for i in np.linspace(10**bk_min, 10**bk_max, num=n2):
 
@@ -256,18 +350,18 @@ class GainCalculator:
 
 
                 print("background",i)
-                print('exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'.txt')
+                print('exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'line=' + str(line_nb) + '.txt')
 
-                if self.load_files and os.path.exists('exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'.txt'):
+                if self.load_files and os.path.exists('exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'line=' + str(line_nb) + '.npy'):
                     #load it
-                    print("it exists")
-                    filename = 'exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'.txt'
-                    ps = np.loadtxt(filename, unpack=True)
+                    print("Loading file..")
 
-                    stimes = ps[0]
-                    samples = ps[1]
-                    samples_unpro = np.zeros(samples.shape)
-                    uncertainty_sampled = ps[2]
+                    with open('exports/B='+str(i)+';G='+str(j)+';V='+str(nsb_var)+';N='+str(noise_)+'line=' + str(line_nb) + '.npy', 'rb') as f:
+
+                        stimes = np.load(f)
+                        samples = np.load(f)
+                        samples_unpro = np.zeros(samples.shape)
+                        uncertainty_sampled = np.load(f)
                     
 
                 else:
@@ -291,7 +385,7 @@ class GainCalculator:
                     eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
 
                     # adc signal
-                    stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele)
+                    stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, line_nb)
 
                 #This part should be done all the time, even when it is loaded
                 bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array, stddev_uncert_mean, stddev_mean = self.esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
@@ -301,12 +395,10 @@ class GainCalculator:
 
                 s_mean_array.append(s_mean)
                 freq.append(i)
-                std_dev.append(std*std)
+                std_dev.append(stddev_mean**2)
                 std_dev_unpro.append(std_unpro)
                 theoretical.append(self.esim_init.singePE_area*self.esim_init.gain*self.esim_init.background_rate* 1e-9 + self.esim_init.offset)
                 ratio_bl_exp.append(bl_mean/(self.esim_init.singePE_area*self.esim_init.gain*self.esim_init.background_rate* 1e-9 + self.esim_init.offset))
-
-                #gain_ = esim.extractGain(stimes, samples, samples_unpro, bl_mean)
                 
                 if self.esim_init.show_signal_graphs:
                     plt.figure()
@@ -319,44 +411,13 @@ class GainCalculator:
                     plt.legend(loc="upper left")
                     plt.show()
 
-                    """
-                    plt.figure()
-                    plt.title("Electronic signal")
-                    #plt.scatter(evts_br, np.zeros(evts_br.shape))
-                    #plt.bar(times, pmtSig)
-                    plt.plot(times, eleSig, label=i)
-                    plt.fill_between(times, [a - b for a, b in zip(eleSig, uncertainty_ele)], [a + b for a, b in zip(eleSig, uncertainty_ele)], alpha=0.2)
-                    plt.xlabel("Time/ns")
-                    plt.ylabel("Amplitude")
-                    plt.legend(loc="upper left")
-
-                    plt.figure()
-                    plt.title("PMT signal")
-                    #plt.scatter(evts_br, np.zeros(evts_br.shape))
-                    #plt.bar(times, pmtSig)
-                    plt.plot(times, pmtSig,label=i)
-                    plt.fill_between(times, [a - b for a, b in zip(pmtSig, uncertainty_pmt)], [a + b for a, b in zip(pmtSig, uncertainty_pmt)], alpha=0.2)
-                    plt.xlabel("Time/ns")
-                    plt.ylabel("Amplitude")
-                    plt.legend(loc="upper left")
-                    """
-
-
 
             #Lets calculate the uncertainty on offset :
             #Uncertainty on the fit
 
-            #print("bl mean",bl_mean_uncer_array)
-
             popt, pcov = curve_fit(self.line_1, freq, bl_mean_array, sigma=bl_mean_uncer_array)
-            #print("a =", popt[0], "+/-", pcov[0,0]**0.5)
-            #print("b =", popt[1], "+/-", pcov[1,1]**0.5)
-
-
             offset = popt[1]
             offset_uncertainty = pcov[1,1]**0.5
-
-            
 
             #Try to reimplement the classical curve fit with the self variable
             if self.esim_init.slope_method == "odr":
@@ -364,12 +425,7 @@ class GainCalculator:
                 #Substraction of uncertainty
                 quad_model = odr.Model(self.line_)
 
-
-                ####Need to find a way to get the uncertainty of stddev
-                ############It is not very good but let's assume it is the same as blmean
-
                 data = odr.RealData(bl_mean_array - offset, std_dev, sx=bl_mean_uncer_array + offset_uncertainty, sy=bl_mean_uncer_array + offset_uncertainty)
-                #data = odr.RealData(bl_mean_array - offset, std_dev, sx=np.repeat(1,len(bl_mean_uncer_array + offset_uncertainty)), sy=np.repeat(1,len(bl_mean_uncer_array + offset_uncertainty)))
                 odr_ = odr.ODR(data, quad_model, beta0=[1., 0.])
 
                 out = odr_.run()
@@ -379,34 +435,33 @@ class GainCalculator:
                 slope = popt2[0]
                 slope_error = perr2[0]
 
-                #print(slope, slope_error)
-
             elif self.esim_init.slope_method == "classical":
                 popt2, pcov2 = curve_fit(self.line_1,  bl_mean_array - offset, std_dev, sigma=bl_mean_uncer_array + offset_uncertainty)
+
                 slope = popt2[0]
+                offset_ = popt2[1]
 
                 slope_error = pcov2[0,0]**0.5
 
-                #print(slope, slope_error)
-
-
-            ##print bl_mean-offset vs stddev with slopes as a reference
-
             if self.esim_init.show_graph == True:
 
-                #print("bl_mean", bl_mean_uncer_array)
-                #print("offset", offset_uncertainty)
+                print("bl_mean", bl_mean_uncer_array)
 
                 plt.errorbar(bl_mean_array-offset, std_dev, xerr=bl_mean_uncer_array + offset_uncertainty, yerr=bl_mean_uncer_array + offset_uncertainty, fmt='o', label="data")
-                #plt.errorbar(bl_mean_array-offset, std_dev, xerr=np.repeat(1,len(bl_mean_uncer_array + offset_uncertainty)), yerr=np.repeat(1,len(bl_mean_uncer_array + offset_uncertainty)), fmt='o', label="data")
+                #plt.plot(bl_mean_array-offset, std_dev)
                 plt.plot(bl_mean_array-offset, [x * slope for x in bl_mean_array-offset], label="gain="+str(j))
                 
-                
+            ###########debuging right here
+            #plt.plot(freq, std_dev)
+
+            print("freq",)
 
             slopes.append(slope)
             slopes_uncertainties.append(slope_error)
 
-        plt.xlabel("bl_mean_array-offset")
+
+        plt.xlabel("freq")
         plt.ylabel("std_dev")
         plt.legend(loc="upper left")
+
         return gains, slopes, slopes_uncertainties

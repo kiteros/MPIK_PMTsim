@@ -75,7 +75,7 @@ class BL_shift:
 			    print("std", std)
 
 			
-			plt.plot(std_array, bl_mean_array, label="j")
+			plt.plot(bl_mean_array, std_array, label="j")
 		#plt.scatter(br_rate, np.zeros(len(br_rate)))
 		plt.show()
 
