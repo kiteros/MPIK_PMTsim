@@ -2,7 +2,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import norm, rv_histogram, randint, poisson, expon, exponnorm
+from scipy.stats import rv_histogram, randint, poisson, expon, exponnorm
 from scipy.signal import resample
 import scipy.integrate as integrate
 from pulser import Pulser
@@ -14,6 +14,7 @@ from scipy import odr
 from pylab import *
 import statistics
 import os.path
+from scipy.stats import norm
 
 
 class BL_stddev:

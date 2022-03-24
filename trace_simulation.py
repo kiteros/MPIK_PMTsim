@@ -9,6 +9,7 @@ import statistics
 import scipy.integrate as integrate
 import math 
 import sys
+from scipy.stats import skew
 
 
 
@@ -103,10 +104,10 @@ class TraceSimulation:
         transit_time_jitter = 0.75, #From CTA.cfg, also : 0.64 Obtained from pmt_specs_R11920.cfg
         background_rate_method = "poisson", #poisson, exponential
         #NSB from 0..2GHz
-        background_rate = 1e5, #Hz
+        background_rate = 1e7, #Hz
         show_graph = True,
         no_signal_duration = 1e5, #in ns
-        remove_padding = True,
+        remove_padding = False,
         max_nsb_var = 0.1, #Maximum variation of the NSB per second
         nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
         gain_extraction_method = "baseline", #pulse, baseline, debug, under_c, blstddev, bl_shift
@@ -502,14 +503,9 @@ class TraceSimulation:
             plt.legend(loc="upper left")
             plt.show()
 
-        ####print the signal : 
-        #Save it np.save()
 
-        with open('exports/B='+str(self.background_rate)+';G='+str(self.gain)+';V='+str(self.max_nsb_var)+';N='+str(self.noise)+'line=' + str(line_nb) + '.npy', 'wb') as f:
-            
-            np.save(f, stimes)
-            np.save(f, samples)
-            np.save(f, uncertainty_sampled)
+
+        
             
 
         ##Here uncertainty sampled is just a repetition of the same uncertainty
@@ -625,7 +621,7 @@ class TraceSimulation:
 
         return math.sqrt(deviations)
 
-    def FPGA(self, times, signal, samples_unpro, uncert):
+    def FPGA(self, times, signal, samples_unpro, uncert, line_nb, save_graph):
 
         bl = signal[0]
         bl_array = []
@@ -698,8 +694,56 @@ class TraceSimulation:
         ####to remove after, this is a safe way to know uncertainty
         transformed_signal = np.std(bl_array)
 
-        return bl_mean, s_mean, stddev_baseline, np.std(bl_array_unpro-samples_unpro), transformed_signal, bl_array, stddev_uncert_mean, stddev_mean
 
+
+        ##############Calculate the spike coefficient
+
+        spike = 0
+
+        for j in range(len(signal)-1):
+            spike += (signal[j]-signal[j+1])**2
+
+
+        ####print the signal : 
+        #Save it np.save()
+
+        stddev_unpro = np.std(bl_array_unpro-samples_unpro)
+
+
+
+
+        ####Calculate the skew\
+
+        skew_ = skew(signal)
+        print("skew", skew_)
+
+        if save_graph:
+
+            with open('exports/B='+str(self.background_rate)+';G='+str(self.gain)+';V='+str(self.max_nsb_var)
+                +';N='+str(self.noise)+'line=' + str(line_nb) + '.npy', 'wb') as f:
+                
+                np.save(f, times)
+                np.save(f, signal)
+                np.save(f, uncert)
+                np.save(f, bl_mean)
+                np.save(f, stddev_baseline)
+                np.save(f, stddev_mean)
+                np.save(f, spike)
+                np.save(f, s_mean)
+                np.save(f, stddev_unpro)
+                np.save(f, transformed_signal)
+                np.save(f, bl_array)
+                np.save(f, stddev_uncert_mean)
+                np.save(f, skew_)
+
+
+
+
+        return bl_mean, s_mean, stddev_baseline, stddev_unpro, transformed_signal, bl_array, stddev_uncert_mean, stddev_mean, spike, skew_
+
+
+    def deconvolve(self):
+        return 1
 
     def simulateAll(self, peTimes):
         """

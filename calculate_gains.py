@@ -2,7 +2,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import norm, rv_histogram, randint, poisson, expon, exponnorm
+from scipy.stats import rv_histogram, randint, poisson, expon, exponnorm
 from scipy.signal import resample
 import scipy.integrate as integrate
 from pulser import Pulser
@@ -22,6 +22,8 @@ from debug_fcts.debug import Debug
 #from debug_fcts.baseline import Baseline
 from debug_fcts.pulse import Pulse
 
+from scipy.stats import norm
+
 
 class GainCalculator:
 
@@ -31,14 +33,14 @@ class GainCalculator:
         gain_min=2,
         gain_max=15,
 
-        n_train_1=5,#minimum 3 point for covariance
-        n_train_2=5,
+        n_train_1=20,#minimum 3 point for covariance
+        n_train_2=21,
 
-        n_exp_1=5,
-        n_exp_2=5,
+        n_exp_1=19,
+        n_exp_2=17,
 
         bk_min=2.0,
-        bk_max=9.0, #Both in log scale
+        bk_max=10.0, #Both in log scale
         nsb_var = 0.0,
 
         load_files = True, 
@@ -69,7 +71,9 @@ class GainCalculator:
         self.nsb_var = nsb_var
         self.load_files = load_files
 
-        self.nb_lines = 10
+        self.coefficient = 0
+
+        self.nb_lines = 1
 
         print("estimated time", (self.nb_lines*self.n_train_1*self.n_train_2/12)%60, "minutes")
 
@@ -83,6 +87,24 @@ class GainCalculator:
 
     def loop_gain_pulse(self):
         return 1
+
+    def gaussian(self, x, sigma, mu):
+        fct = (1/(sigma * math.sqrt(2*math.pi)))*math.exp(-(1/2)*(x-mu)**2/sigma**2)
+        return fct
+
+
+    def train(self):
+        pulse = Pulser(step=self.esim_init.t_step, pulse_type="none")
+        evts = pulse.generate_all()
+
+        self.coefficient, coeff_uncertainty, offset_coeff = self.calculate_coeff(evts=evts, noi=1.0, line_nb_=1)
+
+        return 1
+
+    def esimate(self, std, bl_mean):
+        gain = 15
+        b_rate = 1e8
+        return gain, b_rate
 
 
     def extract_gain(self):
@@ -158,6 +180,8 @@ class GainCalculator:
                 last_val.append(new_gain_exp[-1])
 
             ax.fill_between(gains, [a - b for a, b in zip(gains, exp_gain_unc)],[a + b for a, b in zip(gains, exp_gain_unc)],alpha=0.2)
+
+            print("LAST UNCERT", exp_gain_unc[-1])
             ax.legend(loc="upper left")
             #now calculate the deviation
 
@@ -166,7 +190,25 @@ class GainCalculator:
             plt.figure()
             plt.scatter(last_val, np.zeros(len(last_val)))
             plt.hist(last_val, density=True, bins=10)
-            plt.plot()
+
+            ##calculate gaussian from histogram 
+
+            data = norm.rvs(10.0, 2.5, size=500)
+            
+            mu, std = norm.fit(last_val)
+            xmin, xmax = plt.xlim()
+            x = np.linspace(xmin, xmax, 100)
+            p = norm.pdf(x, mu, std)
+
+            plt.plot(x, p)
+
+            x_values = [mu-std/2, mu+std/2]
+            y_values = [0, 0]
+
+            x_values2 = [mu-exp_gain_unc[-1]/2, mu+exp_gain_unc[-1]/2]
+            y_values2 = [0, 0]
+            plt.plot(x_values, y_values,'bo', linestyle="--")
+            plt.plot(x_values2, y_values2,'ro', linestyle="--")
 
             plt.show()
 
@@ -224,6 +266,52 @@ class GainCalculator:
 
             BL_stddev.execute(self.esim_init)
 
+        elif self.esim_init.gain_extraction_method == "deconvolution":
+            ##write the deconvolution of the signal
+            pulse = Pulser(step=self.esim_init.t_step, pulse_type="none")
+            evts = pulse.generate_all()
+
+            esim = TraceSimulation(
+                ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+                timeSpec="data/bb3_1700v_timing.txt",
+                pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+            )
+
+            evts_br, k_evts = esim.simulateBackground(evts)
+
+            # pmt signal
+            times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+
+
+            eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+            # adc signal
+            stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
+
+            #This part should be done all the time, even when it is loaded
+            bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array, stddev_uncert_mean, stddev_mean, spike = self.esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
+
+            square = np.repeat([0., 1., 0.], 10000)
+
+            filter_ = [x+0.1 for x in esim.pulseShape[1]]
+
+            plt.figure()
+            plt.title("signal")
+            plt.plot(stimes, samples)
+
+            plt.figure()
+            plt.title("filter")
+            plt.plot(filter_)
+
+            plt.figure()
+            plt.title("convoluted")
+            plt.plot(times, eleSig)
+            plt.plot(times, pmtSig)
+
+            
+
+            ##denoising maybe ???
+
 
         return 1
 
@@ -261,9 +349,11 @@ class GainCalculator:
         #Make sure we have train for the coeff (the bigger, the more precise)
         #Then calculate the coefficient
 
-        plt.figure()
-        plt.plot(gains, slopes, 'bo')
-        plt.fill_between(gains, [a - b for a, b in zip(slopes, slopes_uncertainties)], [a + b for a, b in zip(slopes, slopes_uncertainties)], alpha=0.2)
+        if self.esim_init.show_graph:
+
+            plt.figure()
+            plt.plot(gains, slopes, 'bo')
+            plt.fill_between(gains, [a - b for a, b in zip(slopes, slopes_uncertainties)], [a + b for a, b in zip(slopes, slopes_uncertainties)], alpha=0.2)
 
         ####Here we have an error on coeff
         popt, pcov = curve_fit(self.line_1, gains, slopes, sigma=slopes_uncertainties)
@@ -272,7 +362,9 @@ class GainCalculator:
         offset_coeff = popt[1]
         coeff_uncertainty = pcov[0,0]**0.5
 
-        plt.plot(gains, [x * coeff + offset_coeff for x in gains])
+        if self.esim_init.show_graph:
+
+            plt.plot(gains, [x * coeff + offset_coeff for x in gains])
 
 
         return coeff, coeff_uncertainty, offset_coeff
@@ -321,7 +413,8 @@ class GainCalculator:
         slopes_uncertainties = []
         gains = []
 
-        plt.figure()
+        if self.esim_init.show_graph:
+            plt.figure()
 
         for j in np.linspace(gain_min, gain_max, num=n1):
 
@@ -362,6 +455,17 @@ class GainCalculator:
                         samples = np.load(f)
                         samples_unpro = np.zeros(samples.shape)
                         uncertainty_sampled = np.load(f)
+                        bl_mean = np.load(f)
+                        std = np.load(f)
+                        stddev_mean = np.load(f)
+                        spike = np.load(f)
+                        s_mean = np.load(f)
+                        std_unpro = np.load(f)
+                        bl_mean_uncertainty = np.load(f)
+                        bl_array = np,load(f)
+                        stddev_uncert_mean = np.load(f)
+                        skew = np.load(f)
+                        ####load the parameters the classical way such as not to reload everything when I change one parameter
                     
 
                 else:
@@ -387,8 +491,8 @@ class GainCalculator:
                     # adc signal
                     stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, line_nb)
 
-                #This part should be done all the time, even when it is loaded
-                bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array, stddev_uncert_mean, stddev_mean = self.esim_init.FPGA(stimes, samples, samples_unpro, uncertainty_sampled)
+                    #This part should be done all the time, even when it is loaded
+                    bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array, stddev_uncert_mean, stddev_mean, spike, skew = esim.FPGA(stimes, samples, samples_unpro, uncertainty_sampled, line_nb, True)
 
                 bl_mean_array.append(bl_mean)
                 bl_mean_uncer_array.append(bl_mean_uncertainty)
@@ -459,9 +563,9 @@ class GainCalculator:
             slopes.append(slope)
             slopes_uncertainties.append(slope_error)
 
-
-        plt.xlabel("freq")
-        plt.ylabel("std_dev")
-        plt.legend(loc="upper left")
+        if self.esim_init.show_graph:
+            plt.xlabel("freq")
+            plt.ylabel("std_dev")
+            plt.legend(loc="upper left")
 
         return gains, slopes, slopes_uncertainties
