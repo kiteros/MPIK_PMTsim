@@ -33,15 +33,16 @@ class GainCalculator:
         gain_min=2,
         gain_max=15,
 
-        n_train_1=20,#minimum 3 point for covariance
-        n_train_2=21,
+        n_train_1=9,#minimum 3 point for covariance
+        n_train_2=9,
 
-        n_exp_1=19,
-        n_exp_2=17,
+        n_exp_1=6,
+        n_exp_2=5,
 
-        bk_min=2.0,
-        bk_max=10.0, #Both in log scale
+        bk_min=5.0,
+        bk_max=9.0, #Both in log scale, limited to 9 for now
         nsb_var = 0.0,
+        noise = 1.0,
 
         load_files = True, 
         ):
@@ -70,6 +71,7 @@ class GainCalculator:
         self.bk_max = bk_max
         self.nsb_var = nsb_var
         self.load_files = load_files
+        self.noise = noise
 
         self.coefficient = 0
 
@@ -97,14 +99,30 @@ class GainCalculator:
         pulse = Pulser(step=self.esim_init.t_step, pulse_type="none")
         evts = pulse.generate_all()
 
-        self.coefficient, coeff_uncertainty, offset_coeff = self.calculate_coeff(evts=evts, noi=1.0, line_nb_=1)
-
+        self.coefficient, coeff_uncertainty, offset_coeff = self.calculate_coeff(evts=evts, noi=self.noise, line_nb_=1)
+        print("coefficient", self.coefficient)
         return 1
 
-    def esimate(self, std, bl_mean):
-        gain = 15
-        b_rate = 1e8
-        return gain, b_rate
+    def esimate(self, bl_mean, std):
+
+        ###first step, slope from the point to origin
+
+        print(self.coefficient)
+
+        #popt2, pcov2 = curve_fit(self.line_1,  [0, bl_mean-200], [0, std])
+        slope = np.polyfit([0, bl_mean-200], [0, std**2], 1)[0]
+
+        plt.figure()
+        plt.scatter([0, bl_mean-200], [0, std**2], marker='o')
+        #plt.plot(bl_mean_array-offset, std_dev)
+        plt.plot([0, bl_mean-200], [x * slope for x in [0, bl_mean-200]])
+
+        plt.show()
+
+
+        gain = slope / self.coefficient
+
+        return gain
 
 
     def extract_gain(self):

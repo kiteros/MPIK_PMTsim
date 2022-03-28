@@ -27,6 +27,8 @@ from scipy.stats import norm
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from sklearn import linear_model 
 
+from calculate_gains import GainCalculator
+
 
 brate = []
 gain = []
@@ -96,7 +98,7 @@ for filename in os.listdir('exports/'):
 	            stddev.append(stddev_mean)
 	            spikes.append(spike)
 	            skews.append(skew)
-	            X.append([bl_mean, std, stddev_mean, spike])
+	            X.append([bl_mean, stddev_mean, spike])
 
 
 ###We might only want those that are not in double
@@ -165,7 +167,17 @@ stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, el
 bl_mean, _, std, _, _, _, _, stddev_mean, spike, skew = esim.FPGA(stimes, samples, samples_unpro, uncertainty_sampled, 1,  False)
 
 
-predict = regr.predict([[bl_mean, std, stddev_mean, spike]])
+
+
+
+
+
+#####steps : calculate the slope between the origin and the point in stddev/blshift space, and gives me gain as a result
+
+gc = GainCalculator()
+gc.train()
+
+predict = regr.predict([[bl_mean, stddev_mean, spike]])
 
 print("----------predict")
 print(predict)
@@ -173,5 +185,9 @@ print("background rate", predict[0][0])
 print("gain", predict[0][1])
 print("----------real")
 print("background_rate", predict_brate)
-
 print("gain", predict_gain)
+
+
+predicted_gain = gc.esimate(bl_mean, stddev_mean)
+print("predicted gain", predicted_gain)
+
