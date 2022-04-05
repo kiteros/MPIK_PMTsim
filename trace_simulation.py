@@ -105,15 +105,16 @@ class TraceSimulation:
         background_rate_method = "poisson", #poisson, exponential
         #NSB from 0..2GHz
         background_rate = 1e7, #Hz
-        show_graph = True,
-        no_signal_duration = 1e5, #in ns
-        remove_padding = False,
+        show_graph = False,
+        no_signal_duration = 1e6, #in ns
+        remove_padding = True,
         max_nsb_var = 0.1, #Maximum variation of the NSB per second
         nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
         gain_extraction_method = "baseline", #pulse, baseline, debug, under_c, blstddev, bl_shift
 
         slope_method = "odr", #classical, odr
         show_signal_graphs = False,
+        verbose = True,
         
     ):
         """
@@ -144,6 +145,7 @@ class TraceSimulation:
         self.gain_extraction_method = gain_extraction_method
         self.slope_method = slope_method
         self.show_signal_graphs = show_signal_graphs
+        self.verbose = verbose
 
         np.set_printoptions(threshold=sys.maxsize)
 
@@ -481,7 +483,7 @@ class TraceSimulation:
 
         #Removing padding for easier readability
         if self.remove_padding:
-            extra_padding = 5
+            extra_padding = 10
             stimes = stimes[int(self.t_pad // 4)+extra_padding:]
             stimes = stimes[:len(stimes) - int(self.t_pad // 4) - extra_padding]
             samples = samples[int(self.t_pad // 4)+extra_padding:]
@@ -603,7 +605,7 @@ class TraceSimulation:
                 self.lamda = self.t_step * new_background_rate * 1e-9#From the def E(poisson) = lamda
 
             #fill the last interval
-            for i, q in enumerate(poisson.rvs(abs(self.lamda), size=int((t_max - n_intervals*var_time) // self.t_step))):
+            for i, q in enumerate(poisson.rvs(abs(self.lamda), size=int(abs((t_max - n_intervals*var_time) // self.t_step)))):
                 evts_list.extend([t_min + var_time*n_intervals + i * self.t_step] * q)
                 k_evts.extend([q] * q)
 
@@ -623,7 +625,8 @@ class TraceSimulation:
 
     def FPGA(self, times, signal, samples_unpro, uncert, line_nb, save_graph):
 
-        bl = signal[0]
+        bl = int(self.singePE_area*self.gain*self.background_rate*1e-9+self.offset)
+        print(bl)
         bl_array = []
         uncert_bl_mean_R = 0 #region method
 
@@ -654,7 +657,8 @@ class TraceSimulation:
 
 
         uncert_bl_mean = statistics.fmean(uncert)
-        print("before uncert transform", uncert_bl_mean)
+        if self.verbose:
+            print("before uncert transform", uncert_bl_mean)
 
         ##recalculate the right uncert on bl from the smoothing coefficient
 
@@ -665,7 +669,8 @@ class TraceSimulation:
 
         transformed_signal = transformed_signal / math.sqrt(len(uncert))
 
-        print("after uncert transform", transformed_signal)
+        if self.verbose:
+            print("after uncert transform", transformed_signal)
 
         bl_mean = statistics.fmean(bl_array)
         s_mean = statistics.fmean(signal)
@@ -678,7 +683,7 @@ class TraceSimulation:
 
         stddev_baseline = np.std(bl_array) #to export
         #stddev_baseline_mean = np.std(np.ones(len(signal))*bl_mean-signal)
-        stddev_mean = np.std(signal) #rightest one
+        stddev_mean = np.std(signal, ddof=1) #rightest one
 
         #We want to know the relationship between stddev_baseline and stddev_mean
 
@@ -715,7 +720,8 @@ class TraceSimulation:
         ####Calculate the skew\
 
         skew_ = skew(signal)
-        print("skew", skew_)
+        if self.verbose:
+            print("skew", skew_)
 
         if save_graph:
 
@@ -735,6 +741,9 @@ class TraceSimulation:
                 np.save(f, bl_array)
                 np.save(f, stddev_uncert_mean)
                 np.save(f, skew_)
+                np.save(f, self.noise)
+                np.save(f, self.gain)
+                np.save(f, self.background_rate)
 
 
 
