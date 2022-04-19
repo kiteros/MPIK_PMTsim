@@ -34,13 +34,13 @@ class GainCalculator:
         gain_min=2,
         gain_max=15,
 
-        n_train_1=12,#minimum 3 point for covariance ####gains ########keep 12 gains, new standard
-        n_train_2=600,
+        n_train_1=3,#minimum 3 point for covariance ####gains ########keep 12 gains, new standard
+        n_train_2=12,
 
         ###12, 600, rerun the simulation next time i can
 
-        n_exp_1=12,
-        n_exp_2=600,
+        n_exp_1=3,
+        n_exp_2=12,
 
         bk_min=2.0,
         bk_max=10, #Both in log scale, limited to 9 for now
@@ -83,6 +83,27 @@ class GainCalculator:
         self.nb_lines = 1
 
         print("estimated time", (self.nb_lines*self.n_train_1*self.n_train_2/12)%60, "minutes")
+
+        plt.figure()
+        plt.plot(*esim_init.pulseShape)
+        plt.title("Pulse shape")
+        plt.xlabel("t/ns")
+        plt.ylabel("A/au")
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.plot(*esim_init.timeSpec)
+        plt.title("Time spectrum")
+        plt.xlabel("t/ns")
+        plt.ylabel("Probability")
+        plt.subplot(1, 2, 2)
+        plt.plot(*esim_init.ampSpec)
+        plt.title("Amplitude spectrum")
+        plt.xlabel("A/au")
+        plt.ylabel("Probability")
+        plt.show()
+
+
+
 
 
     def line_1(self, x, a, b):

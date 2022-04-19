@@ -2,14 +2,15 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import norm, rv_histogram, randint, poisson, expon
+from scipy.stats import norm, rv_histogram, randint, poisson, expon, exponnorm, skew
 from scipy.signal import resample
 from pulser import Pulser
 import statistics
 import scipy.integrate as integrate
 import math 
 import sys
-from scipy.stats import skew
+from scipy.optimize import curve_fit
+import scipy.special as sse
 
 
 
@@ -106,7 +107,7 @@ class TraceSimulation:
         #NSB from 0..2GHz
         background_rate = 1e7, #Hz
         show_graph = False,
-        no_signal_duration = 1e6, #in ns
+        no_signal_duration = 1e4, #in ns
         remove_padding = True,
         max_nsb_var = 0.1, #Maximum variation of the NSB per second
         nsb_fchange = 1e6, #Hz frequency for the implemented variation of nsb var rate
@@ -114,7 +115,12 @@ class TraceSimulation:
 
         slope_method = "odr", #classical, odr
         show_signal_graphs = False,
-        verbose = True,
+        verbose = False,
+
+        ps_mu = 15.11,
+        ps_amp = 22.0,
+        ps_lambda = 0.0659,
+        ps_sigma = 2.7118,
         
     ):
         """
@@ -146,6 +152,10 @@ class TraceSimulation:
         self.slope_method = slope_method
         self.show_signal_graphs = show_signal_graphs
         self.verbose = verbose
+        self.ps_mu = ps_mu
+        self.ps_amp = ps_amp
+        self.ps_lambda = ps_lambda
+        self.ps_sigma = ps_sigma
 
         np.set_printoptions(threshold=sys.maxsize)
 
@@ -186,7 +196,8 @@ class TraceSimulation:
 
         # load pulse shape from file or simulate
         if pulseShape == None:
-            self.pulseShape = self.simulatePulseShape()
+            self.pulseShape = self.simulatePulseShape(ps_amp, ps_lambda, ps_sigma, ps_mu)
+            print("simulating pulse shape")
         elif type(pulseShape) is str:
             ps = np.loadtxt(pulseShape, unpack=True)
             # ensure correct sampling
@@ -197,10 +208,11 @@ class TraceSimulation:
             self.plotOffset = (t[-1] + t[0]) / 2
 
             ##calculate the parameters of the pulse shape
-            self.singePE_area = self.integrateSignal(self.pulseShape[0], self.pulseShape[1])
-
+            ###fit it
+            print(self.fit_pulseshape(t, ps))
         else:
             self.pulseShape = pulseShape
+        self.singePE_area = self.integrateSignal(self.pulseShape[0], self.pulseShape[1])
         
 
         # get distributions of spectra
@@ -345,7 +357,31 @@ class TraceSimulation:
         asx = np.arange(int((a_mu + 3 * a_sig) / 0.01)) * 0.01
         return asx, norm.pdf(asx, a_mu, a_sig)
 
-    def simulatePulseShape(self, t_mu=0, t_sig=3):
+    def expnorm_fit(self, x, A, l, s, m):
+        return A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*x))*sse.erfc((m+l*s*s-x)/(np.sqrt(2)*s)) # exponential gaussian
+
+
+    def fit_pulseshape(self, x, y):
+        
+        vals = np.linspace(0, 100, num=len(x))
+
+
+        max_value = x[-1]
+        popt, pcov = curve_fit(self.expnorm_fit, vals, y)
+        #print(ps[0])
+        new_mu = (popt[3]/100)*max_value
+        new_lamda = popt[1]/(max_value/100)
+        new_amplitude = popt[0]*(max_value/100)
+        new_sigma = popt[2]*(max_value/100)
+
+        ####calculate bandwidth
+        risetime = new_sigma/(math.erf(0.8)*np.sqrt(2.0/np.pi))
+        bandwidth = new_lamda/(2.0 * np.pi)
+
+        return new_amplitude, new_lamda, new_sigma, new_mu
+
+
+    def simulatePulseShape(self, A=22.0, l=0.0659, s=2.7118, m=15.116):
         """
         Simulates a gaussian pulse shape.
 
@@ -361,9 +397,12 @@ class TraceSimulation:
         tuple of ndarray
                 times in ns and amplitudes in normalized units
         """
-        psx = np.arange(int((6 * t_sig) / self.t_step)) * self.t_step - 3 * t_sig
-        return psx, norm.pdf(psx, t_mu, t_sig)
-
+        """Gaussian pulse with filtered bandwidth in GHz and 10%-90% risetime of the *unfiltered* pulse in nanoseconds."""
+        
+        K = 1/(l*s)
+        x = np.linspace(0, 100, num=1000)
+        return x, A*exponnorm.pdf(x, K, loc=m, scale=s)
+        
     def simulatePMTSignal(self, peTimes, k_evts):
         """
         Simulates PMT signal based on photo electron times.

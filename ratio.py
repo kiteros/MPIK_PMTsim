@@ -138,7 +138,7 @@ for j in range(len(all_ratios)):
 	set_y_log = np.array(set_y_log)
 
 
-	axs[0].loglog(set_x, set_y, label="Gain="+str(format(gains_list[j],".2f")))
+	axs[0].loglog(set_x, set_y/gains_list[j], label="Gain="+str(format(gains_list[j],".2f")))
 	axs[1].loglog(set_x, baseline, label="Gain="+str(format(gains_list[j],".2f")))
 	axs[2].loglog(set_x, var, label="Gain="+str(format(gains_list[j],".2f")))
 	#axs.loglog(set_x, moving_average)
@@ -187,5 +187,12 @@ plt.ylabel("Var/Baseline")
 plt.show()
 
 ##########
+
+####extract the 0.8 coefficient first
+
+coeff = set_y[-1]/gains_list[-1]
+print(coeff)
+
+###load time spectrums...
 
 
