@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import rv_histogram, randint, poisson, expon, exponnorm
 from scipy.signal import resample
@@ -28,13 +31,8 @@ from calculate_gains import GainCalculator
 import csv
 import scipy.fftpack
 from numpy.fft import fft, ifft
-import numpy as np
 
-#
-# configuration
-# time analyse = L * (1/Fsample)
-#
-
+##
 
 esim = TraceSimulation(
     ampSpec="data/spe_R11920-RM_ap0.0002.dat",
@@ -45,7 +43,7 @@ esim = TraceSimulation(
     no_signal_duration = 1e6,
 
     ps_mu = 15.11,
-    ps_amp = 22.0,
+    ps_amp = 1.0,
     ps_lambda = 0.0659,
     ps_sigma = 2.7118,
 )
@@ -66,44 +64,79 @@ def integrateSignal(times, signal):
     sum_
             Integration of the signal
     """
-    step = times[2]-times[1]
+    t_step = times[1]-times[0]
 
     sum_ = 0
     for i in signal:
-        sum_ += i*step # maybe wrong
+        sum_ += i*t_step # maybe wrong
     return sum_
 
-def get_enbw(freq, signal):
-	df = freq[2]-freq[1]
-	enbw_ = 0
-	for i in range(len(freq)):
-		enbw_+= df*signal[i]**2
-	enbw_ = enbw_/(signal[0]**2)
-	return enbw_
 
-def get_enbw_lin(freq, signal):
-	df = freq[2]-freq[1]
-	enbw_ = 0
-	for i in range(len(freq)):
-		enbw_+= df*signal[i]
-	enbw_ = enbw_/(signal[0])
-	return enbw_
+###### test
+
+t0 = 0
+t1 = 2
+n_samples = 10000
+
+xs = np.linspace(t0, t1, n_samples)
+ys = 7 * np.sin(15 * 2 * np.pi * xs) + 3 * np.sin(13 * 2 * np.pi * xs) + 100*np.sqrt(xs)
+
+plt.subplot(2, 1, 1)
+plt.plot(xs, ys)
+
+print(integrateSignal(xs, ys))
+
+np_fft = np.fft.fft(ys)
+amplitudes = 2 / n_samples * np.abs(np_fft) 
+frequencies = np.fft.fftfreq(n_samples) * n_samples * 1 / (t1 - t0)
+
+plt.subplot(2, 1, 2)
+plt.semilogx(frequencies[:len(frequencies) // 2], amplitudes[:len(np_fft) // 2])
+
+plt.show()
+
+######################################
 
 
-def ENBW(t, x):
+# sampling rate
+dt = esim.pulseShape[0][2]-esim.pulseShape[0][1]
+T = esim.pulseShape[0][-1]
+sr = 1/dt
+n_samples = len(esim.pulseShape[0])
+t = np.linspace(min(esim.pulseShape[0]), max(esim.pulseShape[1]), num=n_samples)
+x = esim.pulseShape[1]
 
-	L = len(t) # lenght buffer
-	Tsample = t[2]-t[1]
-	yf = fft(x)
-	yf = 1.0/L * np.abs(yf[0:L//2])
-	xf = np.linspace(0.0, 1.0/(2.0*Tsample), L//2)
-	enbw = get_enbw(xf, yf)
-	return enbw, xf, yf
 
-enbw, xf, yf = ENBW(esim.pulseShape[0], esim.pulseShape[1])
 
-print("ENBW",enbw)
-print("DC offset", np.mean(esim.pulseShape[1]))
+plt.figure(figsize = (8, 6))
+plt.plot(t, x, 'r')
+plt.ylabel('Amplitude')
 
-print("integrate signal", integrateSignal(esim.pulseShape[0], esim.pulseShape[1]))
-print("mean", integrateSignal(esim.pulseShape[0], esim.pulseShape[1])/esim.pulseShape[0][-1])
+plt.show()
+
+X = fft(x)
+X_real = np.real(X)
+X_imag = np.imag(X)
+
+freq = np.fft.fftfreq(n_samples) * n_samples * 1/T
+amplitudes = 2/n_samples * np.abs(X)
+
+one_side = len(x)//2
+
+print(len(x))
+
+plt.figure(figsize = (12, 6))
+plt.subplot(121)
+
+plt.plot(freq[:one_side],amplitudes[:one_side], 'b')
+
+plt.xlabel('Freq (Hz)')
+plt.ylabel('FFT Amplitude |X(freq)|')
+plt.xlim(0, 10)
+
+plt.subplot(122)
+plt.plot(t, ifft(X), 'r')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude')
+plt.tight_layout()
+plt.show()

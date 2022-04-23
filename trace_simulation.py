@@ -400,7 +400,7 @@ class TraceSimulation:
         """Gaussian pulse with filtered bandwidth in GHz and 10%-90% risetime of the *unfiltered* pulse in nanoseconds."""
         
         K = 1/(l*s)
-        x = np.linspace(0, 100, num=1000)
+        x = np.linspace(0, 150, num=3000)
         return x, A*exponnorm.pdf(x, K, loc=m, scale=s)
         
     def simulatePMTSignal(self, peTimes, k_evts):

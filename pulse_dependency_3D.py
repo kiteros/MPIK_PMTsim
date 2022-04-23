@@ -114,13 +114,13 @@ offset_eta = -0.8
 first_lamda = True
 counter=0
 
-for l in np.linspace(0.03, 0.8, num=20):
+for l in np.linspace(0.03, 0.8, num=2):
 
 	plt.figure()
 
-	for k in np.linspace(1, 40, num=8):
+	for k in np.linspace(1, 40, num=2):
 
-		for i in np.linspace(1, 5, num=8):
+		for i in np.linspace(1, 5, num=3):
 
 			####get the offset from a super low brate
 

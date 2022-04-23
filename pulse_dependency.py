@@ -51,58 +51,33 @@ esim = TraceSimulation(
     ps_sigma = 2.7118,
 )
 
-def integrateSignal(times, signal):
-    """
-    Integrates the input signal
+def get_enbw(freq, signal):
+	df = freq[2]-freq[1]
+	enbw_ = 0
+	for i in range(len(freq)):
+		enbw_+= df*signal[i]**2
+	enbw_ = enbw_/(signal[0]**2)
+	return enbw_
 
-    Parameters
-    ----------
-    times - float
-            domain of times
-    signal - float
-            signal arraz
-
-    Returns
-    -------
-    sum_
-            Integration of the signal
-    """
-    t_step = times[1]-times[0]
-
-    sum_ = 0
-    for i in signal:
-        sum_ += i*t_step # maybe wrong
-    return sum_
-
-plt.figure()
-plt.plot(*esim.pulseShape)
+def get_enbw_lin(freq, signal):
+	df = freq[2]-freq[1]
+	enbw_ = 0
+	for i in range(len(freq)):
+		enbw_+= df*signal[i]
+	enbw_ = enbw_/(signal[0])
+	return enbw_
 
 
+def ENBW(t, x):
 
-plt.title("Pulse shape")
-plt.xlabel("t/ns")
-plt.ylabel("A/au")
-plt.show()
+	L = len(t) # lenght buffer
+	Tsample = t[2]-t[1]
+	yf = fft(x)
+	yf = 1.0/L * np.abs(yf[0:L//2])
+	xf = np.linspace(0.0, 1.0/(2.0*Tsample), L//2)
+	enbw = get_enbw(xf, yf)
+	return enbw
 
-####fourier transform
-
-T = 1/esim.pulseShape[0][-1]
-N = len(esim.pulseShape[0])
-
-yf = scipy.fftpack.fft(esim.pulseShape[1])
-xf = np.linspace(0.0, 1.0//(2.0*T), N//2)
-
-fig, ax = plt.subplots()
-yf = 2.0/N * np.abs(yf[:N//2])
-ax.plot(xf, yf)
-plt.show()
-
-#### integrate the transform
-inte = integrateSignal(xf, yf)
-max_ = max(yf)
-print("integrale", inte/max_)
-
-offset_E = 0.24
 
 pulse = Pulser(step=esim.t_step, pulse_type="none")
 evts = pulse.generate_all()
@@ -118,14 +93,22 @@ averages = []
 c_coefficient = []
 d_coefficient = []
 
+offsets_ENBW_list = []
+offsets_ENBW_list_sigmas = []
+offsets_eta_list = []
+
+first_lamda = True
+first_sigma = True
+
+
 
 fig, axs = plt.subplots(2)
 
-for k in np.linspace(1, 50.30, num=3):
+for k in np.linspace(1, 40, num=3):
 
-	for i in np.linspace(1, 5, num=4):
+	for i in np.linspace(0.01, 20, num=3):
 
-		for j in np.linspace(0.001, 1, num=4):
+		for j in np.linspace(0.00001, 1, num=5):
 
 			####get the offset from a super low brate
 
@@ -175,34 +158,40 @@ for k in np.linspace(1, 50.30, num=3):
 			print(bl_mean, stddev_mean, offset)
 			print("ratio", ratio)
 
-			####fourier transform
+			enbw_ = ENBW(esim_init.pulseShape[0], esim_init.pulseShape[1])
 
-			T = 1/esim_init.pulseShape[0][-1]
-			N = len(esim_init.pulseShape[0])
+			###fetch from lambda = 0.02
+			#########################################################################################
+			esim_init_lamda = TraceSimulation(
+			    ampSpec="data/spe_R11920-RM_ap0.0002.dat",
+			    timeSpec="data/bb3_1700v_timing.txt",
+			    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+			    background_rate = 3e9,
+			    gain=10,
+			    no_signal_duration = 1e4,
 
-			yf = scipy.fftpack.fft(esim_init.pulseShape[1])
-			xf = np.linspace(0.0, 1.0//(2.0*T), N//2)
-			yf = 2.0/N * np.abs(yf[:N//2])
+			    ps_mu = 15.11,
+		        ps_amp = k,
+		        ps_lambda = 0.0001,
+		        ps_sigma = i,
+			)
 
-			#### integrate the transform
-			inte = integrateSignal(xf, yf)
-			max_ = max(yf)
-			enbw_ = inte/max_
-			print("integrale", enbw_)
-
+			evts_br, k_evts = esim_init_lamda.simulateBackground(evts)
+			times, pmtSig, uncertainty_pmt = esim_init_lamda.simulatePMTSignal(evts_br, k_evts)
+			eleSig, uncertainty_ele = esim_init_lamda.simulateElectronics(pmtSig, uncertainty_pmt, times)
+			stimes, samples, samples_unpro, uncertainty_sampled = esim_init_lamda.simulateADC(times, eleSig, uncertainty_ele, 1)
+			bl_mean, s_mean, std, std_unpro, bl_mean_uncertainty, bl_array, stddev_uncert_mean, stddev_mean, spike, skew = esim_init_lamda.FPGA(stimes, samples, samples_unpro, uncertainty_sampled, 1, True)
+			ratio_lamda = (stddev_mean**2)/(bl_mean-offset)
+			offset_eta = ratio_lamda/10 #divide by true gain
 			
 			lamdas.append(j)
 
-			enbw.append(enbw_)
-			coeff.append(ratio)
+			enbw.append(enbw_)# - offset_ENBW)
+			coeff.append(ratio)# - offset_eta)
 
-
-			
-		print("statistics", statistics.fmean(enbw)-offset_E)
-		print("ratio", (statistics.fmean(enbw)-offset_E)/statistics.fmean(coeff))
 		
-		enbwratio.append((statistics.fmean(enbw)-offset_E)/statistics.fmean(coeff))
-		axs[0].plot([x - offset_E for x in enbw], coeff, marker='o', label="sigma="+str(i)+"A="+str(k))
+		enbwratio.append((statistics.fmean(enbw))/statistics.fmean(coeff))
+		axs[0].plot(enbw, coeff, marker='o', label="sigma="+str(i)+"A="+str(k))
 		enbw = []
 		coeff = []
 		sigmas.append(i)
@@ -229,22 +218,14 @@ axs[0].legend(loc="upper left")
 axs[1].legend(loc="upper left")
 plt.show()
 
-#plt.figure()
-#plt.scatter(sigmas, enbwratio, marker='o')
-#plt.xlabel("sigma value")
-#plt.ylabel("enbw/coeff")
-
-#plt.figure()
-#plt.plot(amplitudes, coeff)
-#plt.xlabel("amplitudes")
-#plt.ylabel("enbw")
-#plt.legend(loc="upper left")
-#plt.show()
-
-#plt.figure()
-
-#((ENBW-offset_E)/eta  - offset_sigma)/sigma en log log et ca devrait etre lineair
-#plt.show()
+####################offset dependency
+plt.figure()
+plt.plot(offsets_ENBW_list_sigmas, offsets_ENBW_list)
+a2, b2 = np.polyfit(offsets_ENBW_list_sigmas, offsets_ENBW_list, 1)
+plt.plot(offsets_ENBW_list_sigmas, [a2*x+b2 for x in offsets_ENBW_list_sigmas])
+plt.xlabel("sigmas")
+plt.ylabel("enbw offset")
+plt.show()
 
 plt.figure()
 plt.loglog(amplitudes, [-1*x for x in c_coefficient],marker='o')
