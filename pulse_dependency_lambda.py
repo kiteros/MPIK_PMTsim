@@ -114,11 +114,11 @@ offset_ENBW_plot = []
 
 fig, axs = plt.subplots(2)
 
-for k in np.linspace(1.0, 50.0, num=1):
+for k in np.linspace(1.0, 1.0, num=1):
 
-	for i in np.linspace(0.1, 50, num=12):
+	for i in np.linspace(5, 5, num=1):
 
-		for j in np.linspace(0.02, 0.5, num=3):
+		for j in np.linspace(0.00001, 0.01, num=100):
 
 
 
@@ -194,12 +194,12 @@ for k in np.linspace(1.0, 50.0, num=1):
 			
 			lamdas.append(j)
 
-			enbw.append(enbw_-offset_E)
-			coeff.append(ratio-offset_eta)
-			enbwratio.append((enbw_-offset_E)/(ratio-offset_eta))
-			axs[0].scatter(j,(enbw_-offset_E)/(ratio-offset_eta), marker="o")
+			enbw.append(enbw_)#-offset_E)
+			coeff.append(ratio)#-offset_eta)
+			enbwratio.append((enbw_)/(ratio))
+			axs[0].scatter(j,(enbw_)/(ratio), marker="o")
 
-		axs[1].plot(enbw, coeff)
+		axs[1].scatter(enbw, coeff)
 		enbw = []
 		coeff = []
 

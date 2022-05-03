@@ -104,11 +104,11 @@ first_sigma = True
 
 fig, axs = plt.subplots(2)
 
-for k in np.linspace(1, 40, num=3):
+for k in np.linspace(1, 40, num=4):
 
-	for i in np.linspace(0.01, 20, num=3):
+	for i in np.linspace(0.01, 20, num=5):
 
-		for j in np.linspace(0.00001, 1, num=5):
+		for j in np.linspace(0.000001, 1, num=10):
 
 			####get the offset from a super low brate
 
@@ -172,7 +172,7 @@ for k in np.linspace(1, 40, num=3):
 
 			    ps_mu = 15.11,
 		        ps_amp = k,
-		        ps_lambda = 0.0001,
+		        ps_lambda = 0.02,
 		        ps_sigma = i,
 			)
 
