@@ -31,11 +31,42 @@ from calculate_gains import GainCalculator
 import csv
 import scipy.fftpack
 
-# test function
-def fit_function(data, a, b, c, d, e, f, g, h):
-    x = data[0]
-    y = data[1]
-    return a * (x**b) * (y**c) + d*x**e + f*y**g + h
+from scipy import special
+
+
+def get_enbw(times, signal):
+	L = times[-1]
+	t0=-L
+	x = np.linspace(t0, -t0, num=1000)
+	Len = len(x) # lenght buffer
+
+
+
+	dt=x[1]-x[0]
+	#Define function
+	f=signal
+
+	g=fft(f)
+	w = np.fft.fftfreq(f.size)*2*np.pi/dt
+
+	g*=dt*np.exp(-complex(0,1)*w*t0)/(np.sqrt(2*np.pi))
+
+	g = np.abs(g)
+	g = g[0:Len//2]
+	w = w[0:Len//2]
+
+	df = w[2]-w[1]
+	enbw_ = 0
+	for i in range(len(w)):
+		enbw_+= df*g[i]**2
+	enbw_ = enbw_/(g[0]**2)
+
+	return enbw_
+
+def get_theoretical_enbw(lamda, sigma):
+	scaling_y = 0.42
+	th_enbw = (lamda/4)*(np.exp(sigma**2*lamda**2))*special.erfc(sigma*lamda)/(scaling_y**2)
+	return th_enbw
 
 esim = TraceSimulation(
     ampSpec="data/spe_R11920-RM_ap0.0002.dat",
@@ -51,48 +82,6 @@ esim = TraceSimulation(
     ps_sigma = 2.7118,
 )
 
-def integrateSignal(times, signal):
-    """
-    Integrates the input signal
-
-    Parameters
-    ----------
-    times - float
-            domain of times
-    signal - float
-            signal arraz
-
-    Returns
-    -------
-    sum_
-            Integration of the signal
-    """
-    t_step = times[1]-times[0]
-
-    sum_ = 0
-    for i in signal:
-        sum_ += i*t_step # maybe wrong
-    return sum_
-
-
-####fourier transform
-
-T = 1/esim.pulseShape[0][-1]
-N = len(esim.pulseShape[0])
-
-yf = scipy.fftpack.fft(esim.pulseShape[1])
-xf = np.linspace(0.0, 1.0//(2.0*T), N//2)
-
-yf = 2.0/N * np.abs(yf[:N//2])
-
-
-#### integrate the transform
-inte = integrateSignal(xf, yf)
-max_ = max(yf)
-
-offset_E = 0.23
-offset_eta = -0.8
-
 pulse = Pulser(step=esim.t_step, pulse_type="none")
 evts = pulse.generate_all()
 
@@ -104,21 +93,15 @@ enbwratio = []
 amplitudes = []
 averages = []
 
-c_coefficient = []
-d_coefficient = []
-
-first_lamda = True
-
-offset_ENBW_plot = []
-
+th_enbw = []
 
 fig, axs = plt.subplots(2)
 
-for k in np.linspace(1.0, 1.0, num=1):
+for k in np.linspace(22.0, 22.0, num=1):
 
-	for i in np.linspace(5, 5, num=1):
+	for i in np.linspace(2.7, 2.7, num=1):
 
-		for j in np.linspace(0.00001, 0.01, num=100):
+		for j in np.linspace(0.001, 0.2, num=100):
 
 
 
@@ -168,58 +151,24 @@ for k in np.linspace(1.0, 1.0, num=1):
 			ratio = (stddev_mean**2)/(bl_mean-offset)
 			ratio = ratio/10
 
-			####fourier transform
-
-			T = 1/esim_init.pulseShape[0][-1]
-			N = len(esim_init.pulseShape[0])
-
-			yf = scipy.fftpack.fft(esim_init.pulseShape[1])
-			xf = np.linspace(0.0, 1.0//(2.0*T), N//2)
-			yf = 2.0/N * np.abs(yf[:N//2])
-
-			#### integrate the transform
-			inte = integrateSignal(xf, yf)
-			max_ = max(yf)
-			enbw_ = inte/max_
-
-			if first_lamda:
-				#va etre executé au debut de chaque boucle pour lamda
-				offset_E = enbw_
-				offset_eta = ratio
-				first_lamda = False
-				print("First lamda")
-				print(offset_E)
-				print(offset_eta)
 
 			
 			lamdas.append(j)
 
-			enbw.append(enbw_)#-offset_E)
-			coeff.append(ratio)#-offset_eta)
-			enbwratio.append((enbw_)/(ratio))
-			axs[0].scatter(j,(enbw_)/(ratio), marker="o")
+			#enbw.append(get_enbw(esim_init.pulseShape[0], esim_init.pulseShape[1]))
+			th_enbw.append(get_theoretical_enbw(j,i))
+			averages.append(get_theoretical_enbw(j,i)/ratio)
+			coeff.append(ratio)
 
-		axs[1].scatter(enbw, coeff)
+		axs[1].plot(th_enbw, coeff, label="Numerical ENBW")
+		axs[0].plot(lamdas, averages, label="Theoretical ENBW")
 		enbw = []
 		coeff = []
 
-		first_lamda = True
 
 		sigmas.append(i)
-		offset_ENBW_plot.append(offset_E)
 		
-
-
-axs[0].set_ylabel("enbw-offset/eta")
-axs[0].set_xlabel("lamda")
-axs[0].legend(loc="upper left")
-
-
-print(sigmas)
-print(offset_ENBW_plot)
-
-plt.figure()
-plt.loglog(sigmas, offset_ENBW_plot, marker="o")
-plt.xlabel("sigmas")
-plt.ylabel("offset")
+axs[1].set_xlabel("ENBW [GHz]")
+axs[1].set_ylabel("eta")
+axs[1].legend(loc="upper right")
 plt.show()

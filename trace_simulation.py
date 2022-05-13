@@ -121,6 +121,9 @@ class TraceSimulation:
         ps_amp = 22.0,
         ps_lambda = 0.0659,
         ps_sigma = 2.7118,
+
+        pulse_size = 150,
+        pulse_sampling = 1500,
         
     ):
         """
@@ -156,6 +159,8 @@ class TraceSimulation:
         self.ps_amp = ps_amp
         self.ps_lambda = ps_lambda
         self.ps_sigma = ps_sigma
+        self.pulse_size = pulse_size
+        self.pulse_sampling = pulse_sampling
 
         np.set_printoptions(threshold=sys.maxsize)
 
@@ -400,7 +405,7 @@ class TraceSimulation:
         """Gaussian pulse with filtered bandwidth in GHz and 10%-90% risetime of the *unfiltered* pulse in nanoseconds."""
         
         K = 1/(l*s)
-        x = np.linspace(0, 150, num=1500)
+        x = np.linspace(0, self.pulse_size, num=self.pulse_sampling)
         return x, A*exponnorm.pdf(x, K, loc=m, scale=s)
         
     def simulatePMTSignal(self, peTimes, k_evts):
