@@ -99,9 +99,9 @@ fig, axs = plt.subplots(2)
 
 for k in np.linspace(22.0, 22.0, num=1):
 
-	for i in np.linspace(2.7, 2.7, num=1):
+	for i in np.linspace(0.1, 10, num=10):
 
-		for j in np.linspace(0.001, 0.2, num=100):
+		for j in np.linspace(0.001, 0.2, num=40):
 
 
 
@@ -164,6 +164,9 @@ for k in np.linspace(22.0, 22.0, num=1):
 		axs[0].plot(lamdas, averages, label="Theoretical ENBW")
 		enbw = []
 		coeff = []
+		th_enbw = []
+		lamdas = []
+		averages = []
 
 
 		sigmas.append(i)
