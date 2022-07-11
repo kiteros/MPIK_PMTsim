@@ -1,0 +1,1 @@
+This folder handles the baseline shift vs variance method for gain extraction, working for a PE frequency above 100MHz
