@@ -628,7 +628,7 @@ class TraceSimulation:
                 amp_rvs = self.ampDist.rvs() / self.ampDist_drift
 
 
-                t += self.timeDist.rvs() #a remettre tres vite
+                #t += self.timeDist.rvs() #a remettre tres vite
                 signal[int((t - t_min) / self.t_step)] += amp_rvs
                 #what is the difference between adding one and doing nothing ?
 

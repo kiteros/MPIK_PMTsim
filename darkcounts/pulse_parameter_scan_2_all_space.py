@@ -58,17 +58,17 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 #We scan on everz output space (K,P,R)
 #For every selected output, 
 
-noise_linspace = [0.5, 1, 2]#np.linspace(0.5, 2.0, num=1)
-background_linspace = np.logspace(4, 6, num=3)
-gain_linspace = np.linspace(4,16,num=5)
+noise_linspace = [0.8]#np.linspace(0.5, 2.0, num=1)
+background_linspace = np.logspace(5, 5, num=1)
+gain_linspace = np.linspace(10,10,num=1)
 
 
 #For each element [N,B,G] we have a minimizing set
 a_tensor = np.zeros((len(noise_linspace),len(background_linspace),len(gain_linspace),3))
 
 prominence_linspace = np.linspace(3,6,num=5)
-resampling_linspace = np.linspace(1,4,num=4)
-kde_linspace = np.linspace(1,3, num=3)
+resampling_linspace = np.linspace(1,4,num=1)
+kde_linspace = np.linspace(1,3, num=2)
 
 global_minimum = 1000000
 global_minimum_elements = [0,0,0,0]
@@ -76,7 +76,7 @@ global_minimum_elements = [0,0,0,0]
 
 
 for i2, prominence in enumerate(prominence_linspace):
-	for window_ in ['tukey', 'blackman']:
+	for window_ in ['blackman']:
 		for j2, resampling_rate_ in enumerate(resampling_linspace):
 			resampling_rate_ = int(resampling_rate_)
 			for k2, kde_bandwidth in enumerate(kde_linspace):

@@ -105,7 +105,7 @@ brlinspace = np.logspace(5,6,num=5)
 
 gainlinspace = np.linspace(5,10,num=5)
 
-noise_linspace = [0.8]
+noise_linspace = [0.8, 1.5, 2]
 
 
 fig, ax = plt.subplots(1, 3,constrained_layout=True)

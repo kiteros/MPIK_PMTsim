@@ -41,7 +41,7 @@ from scipy import signal
 
 ####start by loading a pulser and making it act on the trace, print it
 
-gain_linspace = np.linspace(4,30,num=12)
+gain_linspace = np.linspace(0,30,num=12)
 
 standard_devs_peaks = []
 
@@ -126,7 +126,7 @@ esim = TraceSimulation(
     #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
     background_rate = 1e6,
     gain=10,
-    no_signal_duration = 1e4,
+    no_signal_duration = 1e5,
     noise=5,
 )
 

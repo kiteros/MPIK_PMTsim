@@ -61,17 +61,17 @@ Current best file for scan : By specifing of 3D parameter and output space, give
 #We scan on everz output space (K,P,R)
 #For every selected output, 
 
-noise_linspace = [0.8]#[0.5, 1, 2]#np.linspace(0.5, 2.0, num=1)
-background_linspace = np.logspace(5.5, 6, num=5)
-gain_linspace = np.linspace(7,10,num=5)
+noise_linspace = [0.8]#np.linspace(0.5, 2.0, num=1)
+background_linspace = np.logspace(5, 5, num=1)
+gain_linspace = np.linspace(10,10,num=1)
 
 
 #For each element [N,B,G] we have a minimizing set
 a_tensor = np.zeros((len(noise_linspace),len(background_linspace),len(gain_linspace),3))
 
-prominence_linspace = np.linspace(2,9,num=30)
-resampling_linspace = np.linspace(1,4,num=4)
-kde_linspace = np.linspace(0.7,4, num=30)
+prominence_linspace = np.linspace(2,9,num=4)
+resampling_linspace = np.linspace(1,4,num=1)
+kde_linspace = np.linspace(0.7,4, num=2)
 
 global_minimum = 1000000
 global_minimum_elements = [0,0,0,0]
@@ -86,7 +86,7 @@ metric_array = []
 
 iteration_number = 0
 for i2, prominence in enumerate(prominence_linspace):
-	for window_ in ['tukey', 'blackman']:
+	for window_ in ['blackman']:
 		for j2, resampling_rate_ in enumerate(resampling_linspace):
 			resampling_rate_ = int(resampling_rate_)
 			for k2, kde_bandwidth in enumerate(kde_linspace):

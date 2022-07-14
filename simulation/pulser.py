@@ -22,16 +22,18 @@ class Pulser:
 
         self.step = step
         self.duration = duration #ns
+        self.depart = 0
 
         if(pulser_type == "PDL800-D"):
             self.pulse_to_pulse_method = "percent", #percent
-            self.pulse_to_pulse_jitter = 0.05#2.6ps
+            self.pulse_to_pulse_jitter = 0.05#%#2.6ps
             self.max_frequency = freq #Hz (real between 80 MHz and 31.25 KHz)
             self.pulse_width = 20#ns
             self.average_power = 50e-3 #W
             self.wvl = 600e-9 #wavelenght in m
-            self.pe_intensity = 40 #number of PE in a pulse
+            self.pe_intensity = 10 #number of PE in a pulse
             self.pulse_type = pulse_type
+
 
 
     
@@ -69,7 +71,7 @@ class Pulser:
 
         return peTimes
 
-    def generate_peTimes_pe(self, times, pulse):
+    def generate_peTimes_pe(self, times, pulse,fwmh):
 
         """
         General the arrival times on the cathode of the PE with respect to the number of PE inside the pulse
@@ -87,7 +89,7 @@ class Pulser:
 
         if self.pulse_type == "none":
             peTimes = []
-        else:
+        elif self.pulse_type == "single":
             #Generate a poissonian variation of the number of PE
             n_pe = poisson.rvs(self.pe_intensity,size=1)[0]
             #generate the pulse from a gaussian + exponential
@@ -96,6 +98,46 @@ class Pulser:
             pulse_dist = rv_histogram((pulse,bins))
 
             peTimes = pulse_dist.rvs(size=int(n_pe))
+
+            print(n_pe)
+        elif self.pulse_type == "pulsed":
+            #First calculate the number of pulses we can do 
+
+            tsx = np.arange(0, self.duration, 1)
+
+            period = (1.0/self.max_frequency)*(1e9) #In ns
+            number_pulses = self.duration // period
+
+            depart = self.depart
+            peak_positions = np.array([])
+
+            peTimes = np.array([])
+            
+            while depart < self.duration:
+                #depart stores the positions of the mu of the last pulse
+                depart += period
+
+                if self.pulse_to_pulse_method == "absolute":
+                    depart += norm.rvs(0.0, self.pulse_to_pulse_jitter*1e-3)
+                elif self.pulse_to_pulse_method == "percent":
+                    depart += norm.rvs(0.0, period*self.pulse_to_pulse_jitter/(2*math.sqrt(2*math.log(2))))
+                peak_positions = np.append(peak_positions, depart)
+            
+            for i in peak_positions:
+                #add a new gaussian for each mu
+                curent_signal = norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
+                n_pe = poisson.rvs(self.pe_intensity,size=1)[0] ###poisson dist of the number of pe
+
+                #n_pe = self.pe_intensity
+
+                #bins = np.append(tsx, tsx[-1] + tsx[1] - tsx[0])
+                #pulse_dist = rv_histogram((curent_signal,bins))
+
+                
+                #peTimes = np.append(peTimes, np.array(norm.rvs(loc=i, scale=fwmh/(2*math.sqrt(2*math.log(2))), size=int(n_pe))))
+                peTimes = np.append(peTimes, np.repeat(i, n_pe))
+                
+                
         
         return peTimes
 
@@ -125,14 +167,24 @@ class Pulser:
             plt.plot(tsx, signal)
             plt.xlabel("Pulse")
 
-
         elif self.pulse_type == "pulsed":
 
             if depart==0:
                 depart = 2*fwmh
 
+            self.depart = depart
+
+            signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.log(2))))
+
+        elif self.pulse_type == "pulsed2":
+
+            if depart==0:
+                depart = 2*fwmh
+
             #period in ns
-            period = (1.0/self.max_frequency)*(1e9)
+            period = (1.0/self.max_frequency)*(1e9) #In ns
+
+            print(period)
 
             #generate array for all the mus of the pulses
             peak_positions = np.array([])
@@ -153,12 +205,12 @@ class Pulser:
                 #add a new gaussian for each mu
                 signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
 
-            """
+        
             plt.figure()
             plt.title("Laser/LED pulse spectrum")
             plt.plot(tsx, signal)
             plt.xlabel("Pulse")
-            """
+            
             
 
         else:
@@ -179,7 +231,7 @@ class Pulser:
         """
 
         times, pulse = self.generate_pulse(fwmh=self.pulse_width)
-        peTimes = self.generate_peTimes_pe(times, pulse)
+        peTimes = self.generate_peTimes_pe(times, pulse,fwmh=self.pulse_width)
         return peTimes
 
         

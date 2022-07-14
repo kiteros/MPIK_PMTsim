@@ -56,9 +56,9 @@ This file tests the list of parameters provided and looks at the standard deviat
 
 z = [8.09025568, -2.75538668]
 
-brlinspace = np.logspace(3,8,num=8)
+brlinspace = np.logspace(2,10,num=5)
 
-gainlinspace = np.linspace(5,10,num=3)
+gainlinspace = np.linspace(4,16,num=3)
 
 noise_linspace = [0.8, 1.5, 2]
 

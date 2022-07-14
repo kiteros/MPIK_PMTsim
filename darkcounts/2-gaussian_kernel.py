@@ -21,7 +21,7 @@ fig, ax = plt.subplots()
 
 print(X)
 
-kde = KernelDensity(kernel="gaussian", bandwidth=0.5).fit(X)
+kde = KernelDensity(kernel="gaussian", bandwidth=2).fit(X)
 log_dens = kde.score_samples(X_plot)
 ax.plot(
     X_plot[:, 0],
