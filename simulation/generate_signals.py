@@ -54,16 +54,16 @@ esim_init = TraceSimulation(
 pulse = Pulser(step=esim_init.t_step, pulse_type="none")
 evts = pulse.generate_all()
 
-for gain in np.linspace(1,20,num=12):
-    for br in np.logspace(4.0, 10.0, num=200):
+for gain in np.linspace(1,20,num=5):
+    for br in np.logspace(6.0, 11.0, num=9):
 
         esim = TraceSimulation(
             ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
             timeSpec="../data/bb3_1700v_timing.txt",
-            pulseShape="../data/pulse_FlashCam_7dynode_v2a.dat",
+            #pulseShape="../data/pulse_FlashCam_7dynode_v2a.dat",
             background_rate = br,
             gain=gain,
-            no_signal_duration = 1e6,
+            no_signal_duration = 1e5,
 
             ps_mu = 15.11,
             ps_lambda = 0.0659,

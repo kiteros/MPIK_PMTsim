@@ -104,7 +104,7 @@ for filename in os.listdir('../tables/'):
 			background_rates.append(ch[1]['True NSB Background'])
 			ratios.append(ch[1]['Baseline/Var'])
 
-		data.append([ch[1]['True NSB Background'], ch[1]['Baseline/Var'], ch[1]["Baseline mean - offset"], ch[1]["Signal Variance"], ch[1]["lamda poisson"], ch[1]["amp std"], ch[1]["ADC noise"], ch[1]["pulse shape total sum"], ch[1]["N samples"]])
+		data.append([ch[1]['True NSB Background'], ch[1]['Baseline/Var'], ch[1]["Baseline mean - offset"], ch[1]["Signal Variance"], ch[1]["lamda poisson"], ch[1]["amp std"], ch[1]["ADC noise"], ch[1]["pulse shape total sum"], ch[1]["N samples"],ch[1]["Signal Variance"]/ch[1]["Signal mean"]])
 
 
 
@@ -143,6 +143,8 @@ for filename in os.listdir('../tables/'):
 		noise = [x[6] for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
 		pulseshape_totalsum = [x[7] for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
 		N_samples = [x[8] for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
+
+		set_y_mean_vs_variance = [x[9] for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
 
 		set_x_log = [np.log10(x[0]) for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
 		set_y_log = [np.log10(x[1]) for x in new_data][int(min_percent*len(new_data)):int(max_percent*len(new_data))]
@@ -196,10 +198,11 @@ for filename in os.listdir('../tables/'):
 
 
 		#plt.semilogx(set_x, np.repeat(eta, len(set_x)), color='red', label="Theoretical eta")
-		plt.fill_between(set_x, np.subtract(set_y/eta,total_std), np.add(set_y/eta,total_std), color=tr_color)
+		#plt.fill_between(set_x, np.subtract(set_y/eta,total_std), np.add(set_y/eta,total_std), color=tr_color)
 			
 		
-		plt.semilogx(set_x, set_y/gains_list[j], label="Gain="+str(format(gains_list[j],".2f")), color=color)
+		#plt.semilogx(set_x, set_y/eta, label="Gain="+str(format(gains_list[j],".2f")), color=color)
+		plt.semilogx(set_x, set_y_mean_vs_variance, label="Gain="+str(format(gains_list[j],".2f")), color=color)
 
 		###executed every line in case only one gain
 		std_gains.append(set_y[5]/eta)#fifth element

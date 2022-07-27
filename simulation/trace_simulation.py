@@ -128,7 +128,7 @@ class TraceSimulation:
         pulse_size = 150,
         pulse_sampling = 1500,
 
-        variation_of_ampdist_std=0.5,
+        variation_of_ampdist_std=0.2,
         force_A = False,
         Fpga = True,
         
@@ -230,7 +230,10 @@ class TraceSimulation:
 
         else:
             self.pulseShape = pulseShape
+
         self.singePE_area = self.integrateSignal(self.pulseShape[0], self.pulseShape[1])
+
+        self.singePE_area_theoretical = self.theoretical_single_PE_area()
         self.pulseShape_TotalSomation = self.sum_squared(self.pulseShape[1])
         
 
@@ -245,15 +248,19 @@ class TraceSimulation:
         self.pulseMean, self.pulseStddev = self.statsCalc(self.pulseShape[0], self.pulseShape[1], self.ampDist)
         self.ampMean, self.ampStddev = self.statsCalc(self.ampSpec[0], self.ampSpec[1], self.ampDist)
         self.ampDist_drift = self.ampDist.mean()#1.025457559561722
+        self.ampMode = self.ampSpec[0][self.ampSpec[1].argmax()]
 
         self.ampStddev = self.ampDist.std()
 
         """
+        
         plt.figure()
         plt.plot(*self.ampSpec)
         print("meannnnn", self.ampMean)
         plt.show()
+
         """
+        
 
 
         # figures for debugging
@@ -281,6 +288,7 @@ class TraceSimulation:
             result += i**2
 
         return result
+
 
     def integrateSignal(self, times, signal):
         """
@@ -546,6 +554,9 @@ class TraceSimulation:
         A=1/(self.expnorm_normalized(self.find_mode(sigma,lamda,mu),lamda,sigma,mu))
         return A
 
+    def theoretical_single_PE_area(self):
+        return self.calculate_A(self.ps_sigma, self.ps_lambda, self.ps_mu)#*np.exp(self.ps_lambda**2*self.ps_sigma**2)
+
 
     def simulatePulseShape(self, l=0.0659, s=2.7118, m=15.116):
         """
@@ -601,8 +612,8 @@ class TraceSimulation:
 
         # make discrete times
         if len(peTimes) > 0:
-            t_min = peTimes.min() - self.t_pad ##############adding one offset for boundary cases
-            t_max = peTimes.max() + self.t_pad
+            t_min = min(peTimes.min(),0) - self.t_pad ##############adding one offset for boundary cases
+            t_max = max(peTimes.max(),self.no_signal_duration)  + self.t_pad
         else :
             t_min = (-1) * self.t_pad
             t_max = self.no_signal_duration + self.t_pad
@@ -799,8 +810,8 @@ class TraceSimulation:
             new_background_rate = self.background_rate
 
             if len(evts) > 0:
-                t_min = evts.min() - self.t_pad
-                t_max = evts.max() + self.t_pad
+                t_min = min(evts.min(), 0) - self.t_pad
+                t_max = max(evts.max(), self.no_signal_duration) + self.t_pad
                 #convert np.array() to python list
                 evts_list = evts.tolist()
             else :
@@ -894,10 +905,10 @@ class TraceSimulation:
 
         self.smoothing_coeff_offset = np.float32(-0.14140167346889987) #maybe should depend on the the gain : TODO
 
-        transformed_signal = math.log10(uncert_bl_mean) + (self.smoothing_coeff_offset)
-        transformed_signal = (10 ** transformed_signal) 
+        #transformed_signal = math.log10(uncert_bl_mean) + (self.smoothing_coeff_offset)
+        #transformed_signal = (10 ** transformed_signal) 
 
-        transformed_signal = transformed_signal / math.sqrt(len(uncert))
+        #transformed_signal = transformed_signal / math.sqrt(len(uncert))
 
         if self.verbose:
             print("after uncert transform", transformed_signal)
@@ -927,7 +938,7 @@ class TraceSimulation:
         """
 
         ####to remove after, this is a safe way to know uncertainty
-        transformed_signal = np.std(bl_array)
+        #transformed_signal = np.std(bl_array)
 
 
 
@@ -968,7 +979,9 @@ class TraceSimulation:
                 np.save(f, spike)
                 np.save(f, s_mean)
                 np.save(f, stddev_unpro)
-                np.save(f, transformed_signal)
+                #np.save(f, transformed_signal)
+                np.save(f, 0)
+                #
                 np.save(f, bl_array)
                 np.save(f, stddev_uncert_mean)
                 np.save(f, skew_)
@@ -984,8 +997,8 @@ class TraceSimulation:
 
 
 
-
-        return bl_mean, s_mean, stddev_baseline, stddev_unpro, transformed_signal, bl_array, stddev_uncert_mean, stddev_mean, spike, skew_
+        #should be transformed_signal instead of 0
+        return bl_mean, s_mean, stddev_baseline, stddev_unpro, 0, bl_array, stddev_uncert_mean, stddev_mean, spike, skew_
 
 
     def deconvolve(self):

@@ -29,6 +29,7 @@ class Pulser:
             self.pulse_to_pulse_jitter = 0.05#%#2.6ps
             self.max_frequency = freq #Hz (real between 80 MHz and 31.25 KHz)
             self.pulse_width = 20#ns
+            self.pulse_std = self.pulse_width/(2*math.sqrt(2*math.log(2)))
             self.average_power = 50e-3 #W
             self.wvl = 600e-9 #wavelenght in m
             self.pe_intensity = 10 #number of PE in a pulse
@@ -91,6 +92,7 @@ class Pulser:
             peTimes = []
         elif self.pulse_type == "single":
             #Generate a poissonian variation of the number of PE
+            """
             n_pe = poisson.rvs(self.pe_intensity,size=1)[0]
             #generate the pulse from a gaussian + exponential
 
@@ -100,6 +102,15 @@ class Pulser:
             peTimes = pulse_dist.rvs(size=int(n_pe))
 
             print(n_pe)
+            """
+
+            peTimes = np.array([])
+
+
+            peTimes = np.append(peTimes, np.repeat(10,20))
+            peTimes = np.append(peTimes, np.repeat(10000,50))
+            peTimes = np.append(peTimes, np.repeat(30000,50))
+
         elif self.pulse_type == "pulsed":
             #First calculate the number of pulses we can do 
 
@@ -125,7 +136,7 @@ class Pulser:
             
             for i in peak_positions:
                 #add a new gaussian for each mu
-                curent_signal = norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
+                curent_signal = norm.pdf(tsx, i, self.pulse_std)
                 n_pe = poisson.rvs(self.pe_intensity,size=1)[0] ###poisson dist of the number of pe
 
                 #n_pe = self.pe_intensity
@@ -134,11 +145,11 @@ class Pulser:
                 #pulse_dist = rv_histogram((curent_signal,bins))
 
                 
-                #peTimes = np.append(peTimes, np.array(norm.rvs(loc=i, scale=fwmh/(2*math.sqrt(2*math.log(2))), size=int(n_pe))))
-                peTimes = np.append(peTimes, np.repeat(i, n_pe))
+                peTimes = np.append(peTimes, np.array(norm.rvs(loc=i, scale=self.pulse_std, size=int(n_pe))))
+                #peTimes = np.append(peTimes, np.repeat(i, n_pe))
                 
                 
-        
+        #print(peTimes)
         return peTimes
 
     
@@ -162,10 +173,14 @@ class Pulser:
 
         if self.pulse_type == "single":
             signal = exponnorm.pdf(tsx, K=10, loc=2*fwmh, scale=3)
+
+
+            """
             plt.figure()
             plt.title("Laser/LED pulse spectrum")
             plt.plot(tsx, signal)
             plt.xlabel("Pulse")
+            """
 
         elif self.pulse_type == "pulsed":
 
@@ -174,7 +189,7 @@ class Pulser:
 
             self.depart = depart
 
-            signal = norm.pdf(tsx, depart, fwmh/(2*math.sqrt(2*math.log(2))))
+            signal = norm.pdf(tsx, depart, self.pulse_std)
 
         elif self.pulse_type == "pulsed2":
 
@@ -203,7 +218,7 @@ class Pulser:
             
             for i in peak_positions:
                 #add a new gaussian for each mu
-                signal += norm.pdf(tsx, i, fwmh/(2*math.sqrt(2*math.log(2))))
+                signal += norm.pdf(tsx, i, self.pulse_std)
 
         
             plt.figure()

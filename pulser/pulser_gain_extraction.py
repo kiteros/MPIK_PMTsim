@@ -38,28 +38,278 @@ from calculate_gains import GainCalculator
 import csv
 
 from scipy import signal
+import scipy.special as sse
+
+import matplotlib.patches as patches
+
+def expnorm_normalized(x,l,s,m):
+    """
+    Fits an exponentially modified gaussian (EMG), normalized (A=1)
+
+    Parameters
+    ----------
+    x - x-values array
+    l - pulse parameter (tail)
+    s - pulse parameter (pulse)
+    m - position parameter
+
+    Returns 
+    ---
+    EMG distribitoon y-array
+
+    """
+
+    f = 0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*x))*sse.erfc((m+l*s*s-x)/(np.sqrt(2)*s)) 
+    return f
+
+def find_nearest(array,value):
+
+    array = np.sort(array)  ###sort ascending
+    idx = np.searchsorted(array, value, side="left")
+    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
+        return array[idx-1], len(array)-(idx-1)-1
+    else:
+        return array[idx], len(array)-idx-1
+
+def erfcxinv(v):
+
+    """
+    Inverse complementary error function scaled
+
+    Parameters
+    ----------
+    v - input value
+
+    Returns 
+    ---
+    output value
+
+    """
+
+    x = np.linspace(-10000,10000, num=1000000)
+    y = sse.erfcx(x)
+
+    value, position = find_nearest(y, v)
+
+    return x[position]
+
+def find_mode(sigma, lamda, mu):
+    """
+    Find the mode of an EMG
+
+    Parameters
+    ----------
+    sigma - pulse parameter
+    lamda - pulse tail parameter
+    mu - pulse position parameter
+
+    Returns 
+    ---
+    mode
+
+    """
+    pos = mu-np.sqrt(2)*sigma*erfcxinv((1/(lamda*sigma))*np.sqrt(2/np.pi))+sigma**2*lamda
+    return pos
+
+def calculate_A(sigma, lamda, mu):
+    """
+    Fits the normalization coefficient A such that the maximum reached 1
+
+    Parameters
+    ----------
+    sigma - pulse parameter
+    lamda - pulse parameter
+    mu - pulse position parameter
+
+    Returns 
+    ---
+    A
+
+    """
+    A=1/(expnorm_normalized(find_mode(sigma,lamda,mu),lamda,sigma,mu))
+    return A
+
+def compute_I2(s, l, m, s_prime):
+	##compute with the trapeze method this integral
+
+	bounds = 1000
+
+	A = calculate_A(s,l,m)
+
+	mode = find_mode(s,l,m)
+
+	m_prime = mode
+
+	x = np.linspace(-bounds,bounds, num=10000)
+	f = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*x))*sse.erfc((m+l*s*s-x)/(np.sqrt(2)*s))  # exponential gaussian
+	g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((x-m_prime)**2)/(s_prime**2))
+	h = f**2*g
+
+	"""
+	plt.figure()
+	plt.plot(x, f)
+	plt.show()
+	"""
+
+	inte = integrate.cumtrapz(h, x)[-1]
+
+	return inte
+
+def compute_I1(s, l, m, pulse):
+	##compute with the trapeze method this integral
+
+	bounds = 1000
+
+	A = calculate_A(s,l,m)
+	mode = find_mode(s,l,m)
+
+	s_prime = pulse.pulse_std
+	period = (1.0/pulse.max_frequency)*(1e9) #In ns
+
+	m_prime = mode
+	print("mode", mode)
+	off = 46
+	x = np.linspace(-bounds,bounds, num=100000)
+	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s**2-2*(24.75-x)))*sse.erfc((m+l*s**2-(24.75-x))/(np.sqrt(2)*s))  # exponential gaussian
+	#f2 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-period)))*sse.erfc((m+l*s*s-(x-period))/(np.sqrt(2)*s))  # exponential gaussian
+	#f3 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-2*period)))*sse.erfc((m+l*s*s-(x-2*period))/(np.sqrt(2)*s))  # exponential gaussian
+	#f4 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(7*period/2- x)))*sse.erfc((m+l*s*s-(7*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((x)**2)/(s_prime**2))
+	#h = g*(f1+f2+f3)
+	h = g*f1
+
+	"""
+	plt.figure()
+	plt.plot(x, h)
+	plt.show()
+	"""
+
+	inte = integrate.cumtrapz(h, x)[-1]
+
+	###We have this empricial coefficient :
+
+	#inte = inte*1.1
+
+	return inte
+
+
+def expected_value(s, l, m, pulse):
+
+	bounds = 1000
+	A = calculate_A(s,l,m)
+	x = np.linspace(-bounds,bounds, num=10000)
+
+	n_trials = 1000
+	results = []
+	for i in range(n_trials):
+
+		t = -norm.rvs(loc=0, scale=pulse.pulse_std, size=1)
+
+		t = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*t))*sse.erfc((m+l*s*s-t)/(np.sqrt(2)*s))
+
+		results.append(t)
+
+	return np.mean(results)
+
+def calculate_I3(s, l, m, pulse):
+	bounds = 1000
+	x = np.linspace(-bounds,bounds, num=10000)
+
+	A = calculate_A(s,l,m)
+	mode = find_mode(s,l,m)
+
+	period = (1.0/pulse.max_frequency)*(1e9) #In ns
+
+	m_prime = mode#Maybe put it at 0 for this one
+	s_prime = pulse.pulse_std
+
+	
+
+	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(period/2 - x)))*sse.erfc((m+l*s*s-(period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	f2 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(3*period/2- x)))*sse.erfc((m+l*s*s-(3*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	f3 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(5*period/2- x)))*sse.erfc((m+l*s*s-(5*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	f4 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(7*period/2- x)))*sse.erfc((m+l*s*s-(7*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((x-m_prime)**2)/(s_prime**2))
+
+	h = g*(f1+f2+f3+f4)
+	inte = integrate.cumtrapz(h, x, initial=0)[-1]
+
+	return inte
+
+def calculate_J2(s, l, m):
+    bounds = 10000
+
+    A = calculate_A(s,l,m)
+
+    mode = find_mode(s,l,m)
+
+    m_prime = mode
+
+    x = np.linspace(-bounds,bounds, num=10000)
+    f = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*x))*sse.erfc((m+l*s*s-x)/(np.sqrt(2)*s))  # exponential gaussian
+    h = f**2
+
+    """
+    plt.figure()
+    plt.plot(x, f)
+    plt.show()
+    """
+
+    inte = integrate.cumtrapz(h, x)[-1]
+    return inte
+
 
 ####start by loading a pulser and making it act on the trace, print it
 
-gain_linspace = np.linspace(0,30,num=12)
+gain_linspace = np.linspace(1,30,num=20)
 
 standard_devs_peaks = []
+mean_peaks = []
+eta_peaks = []
+
+mean_peaks_crests = []
+
+esim_init = TraceSimulation(
+    #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+    timeSpec="../data/bb3_1700v_timing.txt",
+    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+    background_rate = 1e6,
+    gain=10,
+    no_signal_duration = 1e5,
+    noise=1,
+)
+
+###Print the amp
+plt.figure()
+plt.plot(*esim_init.ampSpec)
+
+plt.figure()
+plt.plot(*esim_init.pulseShape)
+
+plt.show()
+
+
+pulser_init = Pulser(step=esim_init.t_step, duration=esim_init.no_signal_duration, pulse_type="pulsed")
+
+I_1 = compute_I1(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)
+
 
 for i in gain_linspace:
 
 	esim = TraceSimulation(
-	    ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+	    #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
 	    timeSpec="../data/bb3_1700v_timing.txt",
 	    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
 	    background_rate = 1e6,
 	    gain=i,
-	    no_signal_duration = 1e4,
-	    noise=5,
+	    no_signal_duration = 5e4,
+	    noise=0,
 	)
 
-	pulse = Pulser(step=esim.t_step, duration=esim.no_signal_duration, pulse_type="pulsed")
+	pulse = Pulser(step=esim.t_step,freq=5e6, duration=esim.no_signal_duration, pulse_type="pulsed")
 	evts = pulse.generate_all()
 
+	
 	evts_br, k_evts = esim.simulateBackground(evts)
 
 	# pmt signal
@@ -72,21 +322,120 @@ for i in gain_linspace:
 	# adc signal
 	stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
 
+	#bl_mean, _, _, _, _, _, _, _, _, _ = esim.FPGA(stimes, samples, samples_unpro, uncertainty_sampled, 1, True)
+
+	"""
+	plt.figure()
+	plt.plot(times, pmtSig)
+	plt.show()
+
+	plt.figure()
+	plt.plot(times, eleSig)
+	plt.show()
+	"""
 
 
 	###Now the goal is to identify every peak
+
+	##Use the upsampling here
+
+
+
+
+	#samples = signal.resample(samples, 4*len(stimes), window='boxcar')
+	#stimes = np.linspace(np.min(stimes), np.max(stimes),4*len(stimes), endpoint=False)
+
+	dt_resampling = stimes[2]-stimes[1]
+
 
 	maxs, _ = signal.find_peaks(samples, prominence=10) ###promeminence devrait dependre du gain ? Non
 	max_values_stimes = stimes[maxs]
 	max_values = samples[maxs]
 
-	"""
+	th_average = i*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*i
+	print("gain", i, th_average)
+	#print("baseline", i, bl_mean)
+
+	
+
+	###let's use say the 2nd or 3rd peak as calibration
+
+
+	######A good way to do a simple calibration is for example to take the highest peak in the 10 percent of the signal
+	cal_index = np.argmax(samples[0:int(len(samples)*0.1)])
+	stimes_cal = stimes[cal_index]
+
+
+	#calibration = (max_values_stimes[5]+max_values_stimes[7]+max_values_stimes[9])/3
+
+	###Print les 3 valeurs de calibration pour comprendre
+
+	
+	
 	plt.figure()
 	plt.plot(stimes, samples)
-	plt.scatter(max_values_stimes, max_values, marker='o', color='red')
-	plt.xlabel("Number of samples")
+
+	plt.vlines(stimes_cal,200,600, color="g")
+
+	calibration = stimes_cal
+
+
+	#plt.scatter(max_values_stimes[5], max_values[5], marker='o', color='green')
+	#plt.scatter(max_values_stimes[7], max_values[7], marker='o', color='green')
+	#plt.scatter(max_values_stimes[9], max_values[9], marker='o', color='green')
+
+	period = (1.0/pulse.max_frequency)*(1e9) #In ns
+	number_pulses = int(pulse.duration // period)
+
+	#width_region = pulse.pulse_std+period*pulse.pulse_to_pulse_jitter+period*0.3##last number is empricial
+	width_region = period
+
+	maximums_stimes = []
+	maximums_values = []
+
+	for i in range(int(0.7*number_pulses)):##Making sure we dont overshoot the signal
+		i=i+1
+
+		upper_bound = calibration+i*period-stimes[0]+width_region/2
+		lower_bound = calibration+i*period-stimes[0]-width_region/2
+
+		upper_bound_n_sample = int(upper_bound//dt_resampling)
+		lower_bound_n_sample = int(lower_bound//dt_resampling)
+
+		#print(calibration)
+		#print(i)
+
+		#plt.vlines(stimes[int((calibration+i*period-stimes[0])/dt_resampling)], 200, 600)##every peak
+		#plt.vlines(calibration+i*period, 200, 600)
+		#plt.vlines(stimes[upper_bound_n_sample], 200, 600)
+
+		###shade the region
+
+		
+		plt.axvspan(stimes[lower_bound_n_sample], stimes[upper_bound_n_sample], alpha=0.5, color='red')
+
+
+
+		#print(samples[lower_bound_n_sample:upper_bound_n_sample])
+
+
+		max_index = np.argmax(samples[lower_bound_n_sample:upper_bound_n_sample])+lower_bound_n_sample
+
+		maximums_values.append(samples[max_index])
+		maximums_stimes.append(stimes[max_index])
+
+	plt.scatter(maximums_stimes, maximums_values, marker='o', color='red')
+	plt.xlabel("time in ns" + str(i))
 	plt.ylabel("LSB")
-	"""
+	plt.close()
+	
+	
+
+	
+
+	
+	
+	
 
 
 	###Do an histogram of the peaks
@@ -94,64 +443,145 @@ for i in gain_linspace:
 	width = (bins[1] - bins[0])
 	center = (bins[:-1] + bins[1:]) / 2
 
+	
 	"""
 	plt.figure()
 	plt.bar(center, hist, align='center', width=width)
 	plt.title("gain : " + str(i))
 	"""
+	
 
-	standard_devs_peaks.append(np.std(max_values))
+	#standard_devs_peaks.append(np.std(max_values))
+	#mean_peaks.append(np.mean(max_values))
+
+	##Now we do it with the new peak finding method
+
+	##below method with the period
+	mean_peaks.append(np.mean(maximums_values))
+	standard_devs_peaks.append(np.std(maximums_values))
+
+	eta_peaks.append(np.std(max_values)**2/(np.mean(max_values)-esim.offset-10))##Also removing the prominence
+
+
+
+	###Find the distribution of the crests
+
+	maxs_crest, _ = signal.find_peaks(-samples, prominence=2) ###promeminence devrait dependre du gain ? Non
+	max_values_stimes_crest = stimes[maxs_crest]
+	max_values_crest = -samples[maxs_crest]
+
+
+	"""
+	
+	plt.figure()
+	plt.plot(stimes, -samples)
+	plt.scatter(max_values_stimes_crest, max_values_crest, marker='o', color='red')
+	plt.xlabel("Number of samples" + str(i))
+	plt.ylabel("LSB")
+	"""
+	
+
+	###Do an histogram of the peaks
+	hist_crests, bins_crests = np.histogram(max_values_crest, density=True, bins=30)
+	width_crest = (bins_crests[1] - bins_crests[0])
+	center_crest = (bins_crests[:-1] + bins_crests[1:]) / 2
+
+	"""
+	plt.figure()
+	plt.bar(center_crest, hist_crests, align='center', width=width_crest)
+	plt.title("crest, gain : " + str(i))
+	"""
+	
+	mean_peaks_crests.append(-np.mean(max_values_crest)) ###important to put the minus to reverse again
 
 
 
 plt.figure()
-plt.plot(gain_linspace, standard_devs_peaks)
+plt.plot(gain_linspace, standard_devs_peaks, label="measured std")
+
+#############Let's comput the theoretical standard deviation
+
+I_2 = compute_I2(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init.pulse_std)
+theoretical_variance = pulser_init.pe_intensity*gain_linspace**2*(esim_init.ampStddev**2+1)*I_2+esim_init.background_rate*gain_linspace**2*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9
+
+
+plt.plot(gain_linspace, np.sqrt(theoretical_variance), label="Theoretical STD")
 
 
 ####fit it
 z = np.polyfit(gain_linspace, standard_devs_peaks, 1)
-plt.plot(gain_linspace, [z[0]*x+z[1] for x in gain_linspace])
-
-print(z)
+plt.plot(gain_linspace, [z[0]*x+z[1] for x in gain_linspace], label="Fit on measured STD")
 
 
+plt.legend(loc="upper left")
+
+
+plt.figure()
+plt.plot(gain_linspace, mean_peaks)
+
+
+
+
+###Trying to understand why the theoretical value doesn't match the real one
+expected_I_1 = expected_value(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)
+
+#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1*esim.ampDist_drift+esim_init.singePE_area*esim_init.background_rate*1e-9)+esim_init.offset
+
+
+#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1/esim.ampMode)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+#theoretical_mean2 = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+###Maybe multiplying by the ampdist mode ?
+
+print("mu", esim_init.ps_mu)
+
+print("I2", I_2)
+print("I_1", I_1)
+
+
+th_mean_all_pe_same_time = pulser_init.pe_intensity*gain_linspace+esim_init.offset
+
+plt.plot(gain_linspace, theoretical_mean, label="WIth pulser")
+#plt.plot(gain_linspace, theoretical_mean, label="WIth pulser 1.2")
+#plt.plot(gain_linspace, th_mean_all_pe_same_time, label="all pe same time")
+plt.legend(loc="upper left")
+
+
+
+####do the same thing with the ratio
+
+plt.figure()
+plt.plot(gain_linspace, eta_peaks, label="measured eta")
+
+
+#theoretical_eta = gain_linspace * ((esim_init.ampStddev**2+1)/(esim.ampDist_drift)) * (I_2/I_1)
+
+
+theoretical_eta = gain_linspace * (esim_init.ampStddev**2+1) * (I_2/I_1) * esim.ampMode
+theoretical_eta2 = gain_linspace * (esim_init.ampStddev**2+1) * (I_2/I_1)
+
+plt.plot(gain_linspace, theoretical_eta, label="theoretical eta mode")
+plt.plot(gain_linspace, theoretical_eta2, label="theoretical eta")
+
+plt.legend(loc="upper left")
+
+
+
+
+
+
+
+###########Now lets do it for the crests
+"""
+theoretical_crests = gain_linspace*pulser_init.pe_intensity*calculate_I3(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)+esim_init.offset
+
+plt.figure()
+plt.plot(gain_linspace, mean_peaks_crests, label="experimental")
+plt.plot(gain_linspace, theoretical_crests, label="theoretical")
+plt.title("crests")
+plt.legend(loc="upper left")
+
+
+"""
 plt.show()
-
-
-####Try to extract a gain
-
-esim = TraceSimulation(
-    ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
-    timeSpec="../data/bb3_1700v_timing.txt",
-    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
-    background_rate = 1e6,
-    gain=10,
-    no_signal_duration = 1e5,
-    noise=5,
-)
-
-pulse = Pulser(step=esim.t_step, duration=esim.no_signal_duration, pulse_type="pulsed")
-evts = pulse.generate_all()
-
-evts_br, k_evts = esim.simulateBackground(evts)
-
-# pmt signal
-times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
-
-
-eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
-
-
-
-# adc signal
-stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
-
-maxs, _ = signal.find_peaks(samples, prominence=10) ###promeminence devrait dependre du gain ? Non
-max_values_stimes = stimes[maxs]
-max_values = samples[maxs]
-
-s = np.std(max_values)
-print(s)
-extracted_gain = (s-z[1])/(z[0])
-
-print("extracted gain", extracted_gain)
