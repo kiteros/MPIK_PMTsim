@@ -7,10 +7,20 @@ from scipy.signal import resample
 import scipy.integrate as integrate
 
 import sys
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
+import os
+#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
+#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
+#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
+#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
+
+print(__file__)
+p1 = os.path.abspath(__file__+"/../../")
+sys.path.insert(0, p1+"\\debug_fcts")
+sys.path.insert(0, p1+"\\simulation")
+sys.path.insert(0, p1+"\\darkcounts")
+sys.path.insert(0, p1+"\\baselineshift")
+
+
 
 from pulser import Pulser
 import scipy
@@ -155,7 +165,7 @@ def compute_I2(s, l, m, s_prime):
 
 	return inte
 
-def compute_I1(s, l, m, pulse):
+def compute_I1(s, l, m, pulse, offset_integral = 0):
 	##compute with the trapeze method this integral
 
 	bounds = 1000
@@ -170,7 +180,7 @@ def compute_I1(s, l, m, pulse):
 	print("mode", mode)
 	off = 46
 	x = np.linspace(-bounds,bounds, num=100000)
-	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s**2-2*(24.75-x)))*sse.erfc((m+l*s**2-(24.75-x))/(np.sqrt(2)*s))  # exponential gaussian
+	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s**2-2*(mode-x)))*sse.erfc((m+l*s**2-(mode-x))/(np.sqrt(2)*s))  # exponential gaussian
 	#f2 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-period)))*sse.erfc((m+l*s*s-(x-period))/(np.sqrt(2)*s))  # exponential gaussian
 	#f3 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-2*period)))*sse.erfc((m+l*s*s-(x-2*period))/(np.sqrt(2)*s))  # exponential gaussian
 	#f4 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(7*period/2- x)))*sse.erfc((m+l*s*s-(7*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
@@ -261,11 +271,14 @@ def calculate_J2(s, l, m):
 
 ####start by loading a pulser and making it act on the trace, print it
 
-gain_linspace = np.linspace(1,30,num=20)
+gain_linspace = np.linspace(1,30,num=7)
 
 standard_devs_peaks = []
 mean_peaks = []
 eta_peaks = []
+
+mean_peaks_PMTsig = []
+mean_peaks_ADC = []
 
 mean_peaks_crests = []
 
@@ -289,7 +302,10 @@ plt.plot(*esim_init.pulseShape)
 plt.show()
 
 
+
+
 pulser_init = Pulser(step=esim_init.t_step, duration=esim_init.no_signal_duration, pulse_type="pulsed")
+print("pulser std", pulser_init.pulse_std)
 
 I_1 = compute_I1(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)
 
@@ -316,7 +332,15 @@ for i in gain_linspace:
 	times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
 
 
+	maxs, _ = signal.find_peaks(pmtSig, prominence=1) ###promeminence devrait dependre du gain ? Non
+	max_values_stimes_PMTsig = times[maxs]
+	max_values_PMTsig = pmtSig[maxs]
+
 	eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+	maxs, _ = signal.find_peaks(eleSig, prominence=4) ###promeminence devrait dependre du gain ? Non
+	max_values_stimes_eleSig = times[maxs]
+	max_values_eleSig = eleSig[maxs]
 
 
 	# adc signal
@@ -324,15 +348,24 @@ for i in gain_linspace:
 
 	#bl_mean, _, _, _, _, _, _, _, _, _ = esim.FPGA(stimes, samples, samples_unpro, uncertainty_sampled, 1, True)
 
+
 	"""
 	plt.figure()
 	plt.plot(times, pmtSig)
-	plt.show()
 
 	plt.figure()
 	plt.plot(times, eleSig)
 	plt.show()
+
 	"""
+
+	
+	print("#####elements")
+	print(esim_init.t_step)
+	print(esim_init.pulseShape[0][2]-esim_init.pulseShape[0][1])
+	print(times[3]-times[2])
+	
+	
 
 
 	###Now the goal is to identify every peak
@@ -460,6 +493,9 @@ for i in gain_linspace:
 	mean_peaks.append(np.mean(maximums_values))
 	standard_devs_peaks.append(np.std(maximums_values))
 
+	mean_peaks_PMTsig.append(np.mean(max_values_PMTsig))
+	mean_peaks_ADC.append(np.mean(max_values_eleSig))
+
 	eta_peaks.append(np.std(max_values)**2/(np.mean(max_values)-esim.offset-10))##Also removing the prominence
 
 
@@ -496,6 +532,7 @@ for i in gain_linspace:
 
 
 
+
 plt.figure()
 plt.plot(gain_linspace, standard_devs_peaks, label="measured std")
 
@@ -529,7 +566,10 @@ expected_I_1 = expected_value(esim_init.ps_sigma, esim_init.ps_lambda, esim_init
 
 
 #theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1/esim.ampMode)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+
+
+#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
 #theoretical_mean2 = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
 
 ###Maybe multiplying by the ampdist mode ?
@@ -542,10 +582,38 @@ print("I_1", I_1)
 
 th_mean_all_pe_same_time = pulser_init.pe_intensity*gain_linspace+esim_init.offset
 
-plt.plot(gain_linspace, theoretical_mean, label="WIth pulser")
+###faire une boucle sur les means
+"""
+for i in np.linspace(-400,400,num=200):
+
+	new_I_1 = compute_I1(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init, i)
+	theoretical_mean = gain_linspace*(pulser_init.pe_intensity*new_I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+	plt.plot(gain_linspace, theoretical_mean, label=str(i))
+
+"""
+
+#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+theoretical_mean = calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)* gain_linspace*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+theoretical_mean_old = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+
+
+plt.plot(gain_linspace, theoretical_mean, label="mean expected value")
+plt.plot(gain_linspace, theoretical_mean_old, label="old")
+
 #plt.plot(gain_linspace, theoretical_mean, label="WIth pulser 1.2")
 #plt.plot(gain_linspace, th_mean_all_pe_same_time, label="all pe same time")
 plt.legend(loc="upper left")
+
+plt.figure()
+plt.plot(gain_linspace, mean_peaks_ADC, label="ADC sig")
+theoretical_mean_PMTsig = np.repeat(1, len(gain_linspace))*I_1*pulser_init.pe_intensity
+plt.plot(gain_linspace, theoretical_mean_PMTsig)
+
+plt.legend(loc="upper left")
+
 
 
 

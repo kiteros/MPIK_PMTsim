@@ -125,8 +125,10 @@ class TraceSimulation:
         ps_lambda = 0.0659,
         ps_sigma = 2.7118,
 
-        pulse_size = 150,
-        pulse_sampling = 1500,
+        pulse_size =150,#150
+        pulse_sampling = 1500,#1500
+
+
 
         variation_of_ampdist_std=0.2,
         force_A = False,
@@ -166,6 +168,8 @@ class TraceSimulation:
         self.variation_of_ampdist_std = variation_of_ampdist_std
         self.force_A = force_A ###force the simulated pulse shape to have the amplitude A (true, false)
         self.Fpga = Fpga
+
+        self.pulse_time_step = self.pulse_size / self.pulse_sampling
 
 
         np.set_printoptions(threshold=sys.maxsize)
@@ -674,6 +678,10 @@ class TraceSimulation:
         uncertainty = np.sqrt(np.convolve(uncertainty, self.pulseShape[1], "same"))
 
         convoved = np.convolve(signal, self.pulseShape[1], "same")
+
+        ps_time_step = self.pulseShape[0][1]-self.pulseShape[0][0]
+
+        #convoved = convoved * ps_time_step
 
         #convoved = scipy.signal.convolve(signal, self.pulseShape[1], "same","direct")
 

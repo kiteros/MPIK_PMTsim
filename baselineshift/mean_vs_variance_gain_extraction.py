@@ -7,11 +7,13 @@ from scipy.signal import resample
 import scipy.integrate as integrate
 
 import sys
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
-sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
+import os
 
-
+p1 = os.path.abspath(__file__+"/../../")
+sys.path.insert(0, p1+"\\debug_fcts")
+sys.path.insert(0, p1+"\\simulation")
+sys.path.insert(0, p1+"\\darkcounts")
+sys.path.insert(0, p1+"\\pulser")
 from pulser import Pulser
 import scipy
 import math 
@@ -172,11 +174,11 @@ pulse = Pulser(step=esim_init.t_step, pulse_type="none")
 evts = pulse.generate_all()
 
 
-brlinspace = np.logspace(3,10,num=12)
+brlinspace = np.logspace(3,10,num=2)
 
-gainlinspace = np.linspace(4,16,num=5)
+gainlinspace = np.linspace(4,16,num=3)
 
-noise_linspace = [0.8, 1.5, 2]
+noise_linspace = [0.8]
 #noise_linspace = [0.8]
 
 
