@@ -8,12 +8,18 @@ import scipy.integrate as integrate
 
 import sys
 import os
-
+"""
 p1 = os.path.abspath(__file__+"/../../")
 sys.path.insert(0, p1+"\\debug_fcts")
 sys.path.insert(0, p1+"\\simulation")
 sys.path.insert(0, p1+"\\darkcounts")
 sys.path.insert(0, p1+"\\pulser")
+"""
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
+
+
 from pulser import Pulser
 import scipy
 import math 
@@ -42,6 +48,8 @@ import scipy.fftpack
 
 from scipy import special
 import scipy.special as sse
+
+plt.rcParams['text.usetex'] = True
 
 def expnorm_normalized(x,l,s,m):
     """
@@ -169,19 +177,80 @@ esim_init = TraceSimulation(
 
 )
 
+"""
+plt.figure()
+plt.plot(esim_init.ampSpec[0][0:int(0.15*len(esim_init.ampSpec[0]))], esim_init.ampSpec[1][0:int(0.15*len(esim_init.ampSpec[1]))])
+plt.grid()
+plt.xlabel("Amplitude",fontsize=15)
+plt.ylabel("Probability density",fontsize=15)
+plt.show()
+"""
+
 
 pulse = Pulser(step=esim_init.t_step, pulse_type="none")
 evts = pulse.generate_all()
 
 
-brlinspace = np.logspace(3,10,num=2)
+brlinspace = np.logspace(7,10,num=30)
 
-gainlinspace = np.linspace(4,16,num=3)
+gainlinspace = np.linspace(4,16,num=8)
 
 noise_linspace = [0.8]
 #noise_linspace = [0.8]
 
+####Only one window
 
+plt.figure()
+
+for gain in gainlinspace:
+    extracted_gains = []
+    for background_rate_ in brlinspace:
+
+        esim = TraceSimulation(
+            ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+            timeSpec="../data/bb3_1700v_timing.txt",
+            #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+            background_rate = background_rate_,
+            gain=gain,
+            no_signal_duration = 1e5,
+            noise=0.8,
+        )
+
+        pulse = Pulser(step=esim.t_step, duration=esim.no_signal_duration, pulse_type="none")
+        evts = pulse.generate_all()
+
+        
+        evts_br, k_evts = esim.simulateBackground(evts)
+
+        # pmt signal
+        times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+
+
+        eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+
+        # adc signal
+        stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
+
+        eta_exp = np.std(samples)**2/(np.mean(samples)-esim.offset)
+        eta_th = (esim.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)/esim_init.singePE_area_theoretical
+
+
+
+        #g_prime_mode = ((np.std(samples)**2)/(np.mean(samples)-esim.offset))*(esim.singePE_area_theoretical/((esim.ampStddev**2+1)*calculate_J2(esim.ps_sigma, esim.ps_lambda, 0)))
+        
+        r = (eta_exp/eta_th)/gain
+        extracted_gains.append(r)
+
+    plt.semilogx(brlinspace, extracted_gains, label="G="+str(format(gain,".2f")))
+
+
+plt.legend(loc="upper right",fontsize=12)
+plt.xlabel(r"$f_{NSB}$[Hz]",fontsize=15)
+plt.ylabel(r"$\frac{G'}{G}$",fontsize=15)
+plt.grid()
+
+"""
 fig, ax = plt.subplots(1, 3,constrained_layout=True)
 
 iter_ = 0
@@ -237,4 +306,6 @@ for noise in noise_linspace:
 
     iter_ += 1
 
+
+"""
 plt.show()

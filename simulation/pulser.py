@@ -32,7 +32,7 @@ class Pulser:
             self.pulse_std = self.pulse_width/(2*math.sqrt(2*math.log(2)))
             self.average_power = 50e-3 #W
             self.wvl = 600e-9 #wavelenght in m
-            self.pe_intensity = 50000 #number of PE in a pulse
+            self.pe_intensity = 50 #number of PE in a pulse
             self.pulse_type = pulse_type
 
 

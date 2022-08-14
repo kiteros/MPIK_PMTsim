@@ -46,6 +46,8 @@ from scipy import signal
 
 from pulse_peak_histogram_2 import PeakHistogram
 
+plt.rcParams['text.usetex'] = True
+
 """
 This file tests the list of parameters provided and looks at the standard deviation of the relative gain
 """
@@ -55,7 +57,8 @@ This file tests the list of parameters provided and looks at the standard deviat
 ### output_ = [P,W,R,K]
 
 input_ = [0.8, 7, 316227]
-output_ = [3.689655172413793, 1, 3, 3.43103448275862]
+output_ = [4.75, 1, 3, 3.75]
+#[3.689655172413793, 1, 3, 3.43103448275862]
 #[3.931034482758621, 0, 1, 2.5206896551724136]
 #[4.625, 0, 4, 3.0999999999999996]
 #[3.75, 1, 3, 4.0]
@@ -101,13 +104,16 @@ print("Extracted gain", relative*input_[1])
 
 
 
-brlinspace = np.logspace(5,6,num=5)
+brlinspace = np.logspace(3,9,num=13)
 
-gainlinspace = np.linspace(5,10,num=5)
+gainlinspace = np.linspace(4,16,num=5)
 
-noise_linspace = [0.8, 1.5, 2]
+noise_linspace = [0.8]
 
 
+
+
+"""
 fig, ax = plt.subplots(1, 3,constrained_layout=True)
 
 iter_ = 0
@@ -142,5 +148,37 @@ for noise in noise_linspace:
 	ax[iter_].set_ylabel("G'/G")
 
 	iter_ += 1
+
+plt.show()
+"""
+
+plt.figure()
+
+for gain in gainlinspace:
+	extracted_gains = []
+	for background_rate_ in brlinspace:
+		ph = PeakHistogram(
+			noise=0.8,
+			background_rate=background_rate_,
+			gain_linspace=[gain],
+			graphs=False,
+			verbose=False,
+			prominence = output_[0],
+		    window = window_,
+		    resampling_rate=output_[2],
+		    kde_banwidth=output_[3],
+		    trace_lenght=1e6,
+
+		)
+
+		r = ph.get_relative_gain_array()[0]
+		extracted_gains.append(r)
+
+	plt.semilogx(brlinspace, extracted_gains, label="G="+str(format(gain,".2f")))
+
+plt.legend(loc="upper left",fontsize=12)
+plt.xlabel(r"$f_{NSB}$[Hz]",fontsize=15)
+plt.ylabel(r"$\frac{G'}{G}$",fontsize=15)
+plt.grid()
 
 plt.show()

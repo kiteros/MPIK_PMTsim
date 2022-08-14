@@ -8,18 +8,19 @@ import scipy.integrate as integrate
 
 import sys
 import os
-#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
-#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
-#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
-#sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
+sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
 
+"""
 print(__file__)
 p1 = os.path.abspath(__file__+"/../../")
 sys.path.insert(0, p1+"\\debug_fcts")
 sys.path.insert(0, p1+"\\simulation")
 sys.path.insert(0, p1+"\\darkcounts")
 sys.path.insert(0, p1+"\\baselineshift")
-
+"""
 
 
 from pulser import Pulser
@@ -171,19 +172,11 @@ def compute_I1(s, l, m, pulse, offset_integral = 0):
 	bounds = 1000
 
 	A = calculate_A(s,l,m)
-	mode = find_mode(s,l,m)
 
 	s_prime = pulse.pulse_std
-	period = (1.0/pulse.max_frequency)*(1e9) #In ns
 
-	m_prime = mode
-	print("mode", mode)
-	off = 46
 	x = np.linspace(-bounds,bounds, num=100000)
-	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s**2-2*(mode-x)))*sse.erfc((m+l*s**2-(mode-x))/(np.sqrt(2)*s))  # exponential gaussian
-	#f2 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-period)))*sse.erfc((m+l*s*s-(x-period))/(np.sqrt(2)*s))  # exponential gaussian
-	#f3 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(x-2*period)))*sse.erfc((m+l*s*s-(x-2*period))/(np.sqrt(2)*s))  # exponential gaussian
-	#f4 = A*0.5*l*np.exp(0.5*l*(2*m+l*s*s-2*(7*period/2- x)))*sse.erfc((m+l*s*s-(7*period/2 - x))/(np.sqrt(2)*s))  # exponential gaussian
+	f1 = A*0.5*l*np.exp(0.5*l*(2*m+l*s**2-2*(offset_integral-x)))*sse.erfc((m+l*s**2-(offset_integral-x))/(np.sqrt(2)*s))  # exponential gaussian
 	g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((x)**2)/(s_prime**2))
 	#h = g*(f1+f2+f3)
 	h = g*f1
@@ -268,10 +261,39 @@ def calculate_J2(s, l, m):
     inte = integrate.cumtrapz(h, x)[-1]
     return inte
 
+def find_h(s, l, m, s_prime):
+	bounds_x = 1000
+	bounds_t = 1000
+
+	x_trials = np.linspace(-bounds_x, bounds_x, num=5000)
+
+	minimizing_Eh = 0
+	minimizing_Xh = 0
+
+
+
+	for x in x_trials:
+
+		t = np.linspace(-bounds_t,bounds_t, num=5000)
+		f = 0.5*l*np.exp(0.5*l*(l*s*s-2*(x-t)))*sse.erfc((l*s*s-(x-t))/(np.sqrt(2)*s))  # exponential gaussian
+		g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((t)**2)/(s_prime**2))
+		h = f*g
+
+		inte = integrate.cumtrapz(h, t)[-1]
+
+		if inte > minimizing_Eh:
+			minimizing_Eh = inte
+			minimizing_Xh = x
+
+	print("Best minimizing x : ", minimizing_Xh)
+	print("best minimizing integral value", minimizing_Eh)
+
+	return minimizing_Xh
+
 
 ####start by loading a pulser and making it act on the trace, print it
 
-gain_linspace = np.linspace(1,30,num=7)
+gain_linspace = np.linspace(4,16,num=5)
 
 standard_devs_peaks = []
 mean_peaks = []
@@ -286,20 +308,11 @@ esim_init = TraceSimulation(
     #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
     timeSpec="../data/bb3_1700v_timing.txt",
     #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
-    background_rate = 1e6,
+    background_rate = 1e9,
     gain=10,
     no_signal_duration = 1e5,
     noise=1,
 )
-
-###Print the amp
-plt.figure()
-plt.plot(*esim_init.ampSpec)
-
-plt.figure()
-plt.plot(*esim_init.pulseShape)
-
-plt.show()
 
 
 
@@ -316,10 +329,10 @@ for i in gain_linspace:
 	    #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
 	    timeSpec="../data/bb3_1700v_timing.txt",
 	    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
-	    background_rate = 1e6,
+	    background_rate = 1e9,
 	    gain=i,
 	    no_signal_duration = 5e4,
-	    noise=0,
+	    noise=0.8,
 	)
 
 	pulse = Pulser(step=esim.t_step,freq=5e6, duration=esim.no_signal_duration, pulse_type="pulsed")
@@ -496,6 +509,9 @@ for i in gain_linspace:
 	mean_peaks_PMTsig.append(np.mean(max_values_PMTsig))
 	mean_peaks_ADC.append(np.mean(max_values_eleSig))
 
+
+	print("std maxvalues", np.std(maximums_values))
+	print("mean maxvalues", np.mean(maximums_values))
 	eta_peaks.append(np.std(max_values)**2/(np.mean(max_values)-esim.offset-10))##Also removing the prominence
 
 
@@ -557,99 +573,40 @@ plt.figure()
 plt.plot(gain_linspace, mean_peaks)
 
 
-
-
-###Trying to understand why the theoretical value doesn't match the real one
-expected_I_1 = expected_value(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)
-
-#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1*esim.ampDist_drift+esim_init.singePE_area*esim_init.background_rate*1e-9)+esim_init.offset
-
-
-#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1/esim.ampMode)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-
-
-
-#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-#theoretical_mean2 = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+10+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-
-###Maybe multiplying by the ampdist mode ?
-
-print("mu", esim_init.ps_mu)
-
-print("I2", I_2)
-print("I_1", I_1)
-
-
-th_mean_all_pe_same_time = pulser_init.pe_intensity*gain_linspace+esim_init.offset
-
-###faire une boucle sur les means
-"""
-for i in np.linspace(-400,400,num=200):
-
-	new_I_1 = compute_I1(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init, i)
-	theoretical_mean = gain_linspace*(pulser_init.pe_intensity*new_I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-
-	plt.plot(gain_linspace, theoretical_mean, label=str(i))
-
-"""
-
-#theoretical_mean = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-
 theoretical_mean = calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)* gain_linspace*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
 
-theoretical_mean_old = gain_linspace*(pulser_init.pe_intensity*I_1)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
-
-
 plt.plot(gain_linspace, theoretical_mean, label="mean expected value")
-plt.plot(gain_linspace, theoretical_mean_old, label="old")
-
-#plt.plot(gain_linspace, theoretical_mean, label="WIth pulser 1.2")
-#plt.plot(gain_linspace, th_mean_all_pe_same_time, label="all pe same time")
-plt.legend(loc="upper left")
-
-plt.figure()
-plt.plot(gain_linspace, mean_peaks_ADC, label="ADC sig")
-theoretical_mean_PMTsig = np.repeat(1, len(gain_linspace))*I_1*pulser_init.pe_intensity
-plt.plot(gain_linspace, theoretical_mean_PMTsig)
-
 plt.legend(loc="upper left")
 
 
+#G=eta*coeff
+#coeff = (var_th/mean_th)^-1
 
+extracted_coeff = 1/((pulser_init.pe_intensity*(esim_init.ampStddev**2+1)*I_2
+	+esim_init.background_rate*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9)/(calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.singePE_area*esim_init.background_rate*1e-9))
 
+print("coef", extracted_coeff)
 ####do the same thing with the ratio
 
+eta = []
+eta_th = []
+
+gain_extracted = []
+
+for i in range(len(mean_peaks)):
+	eta.append((standard_devs_peaks[i]**2)/(mean_peaks[i]-esim_init.offset))
+	eta_th.append((theoretical_variance[i])/(theoretical_mean[i]-esim_init.offset))
+
+print(eta)
 plt.figure()
-plt.plot(gain_linspace, eta_peaks, label="measured eta")
-
-
-#theoretical_eta = gain_linspace * ((esim_init.ampStddev**2+1)/(esim.ampDist_drift)) * (I_2/I_1)
-
-
-theoretical_eta = gain_linspace * (esim_init.ampStddev**2+1) * (I_2/I_1) * esim.ampMode
-theoretical_eta2 = gain_linspace * (esim_init.ampStddev**2+1) * (I_2/I_1)
-
-plt.plot(gain_linspace, theoretical_eta, label="theoretical eta mode")
-plt.plot(gain_linspace, theoretical_eta2, label="theoretical eta")
+plt.plot(gain_linspace, eta, label="measured eta")
+plt.plot(gain_linspace, eta_th)
 
 plt.legend(loc="upper left")
 
 
-
-
-
-
-
-###########Now lets do it for the crests
-"""
-theoretical_crests = gain_linspace*pulser_init.pe_intensity*calculate_I3(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)+esim_init.offset
-
 plt.figure()
-plt.plot(gain_linspace, mean_peaks_crests, label="experimental")
-plt.plot(gain_linspace, theoretical_crests, label="theoretical")
-plt.title("crests")
+plt.plot(gain_linspace, gain_linspace)
+plt.plot(gain_linspace, [x*extracted_coeff for x in eta], label="extracted gain")
 plt.legend(loc="upper left")
-
-
-"""
 plt.show()

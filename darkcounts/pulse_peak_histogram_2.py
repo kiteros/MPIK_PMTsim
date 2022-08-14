@@ -162,7 +162,7 @@ class PeakHistogram:
 			    ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
 			    timeSpec="../data/bb3_1700v_timing.txt",
 			    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
-			    background_rate = 1e6,
+			    background_rate = self.background_rate,
 			    gain=gain,
 			    no_signal_duration = self.trace_lenght,
 			    noise=0.8,

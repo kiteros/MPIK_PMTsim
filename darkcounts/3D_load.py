@@ -50,26 +50,29 @@ from matplotlib import cm
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+plt.rcParams['text.usetex'] = True
 
 """
 Current best file for scan : By specifing of 3D parameter and output space, gives the best list of parameters and a heatmap of the space
 """
-with open(f, 'rb') as file:
+with open('../data/parameter_scan_3D_29jun_br5.5-6_g7-10.npy', 'rb') as file:
 
-	stimes = np.load(file)
-	samples = np.load(file)
-	samples_unpro = np.zeros(samples.shape)
-	uncertainty_sampled = np.load(file)
-	bl_mean = np.load(file)
-	std = np.load(file)
-	stddev_mean = np.load(file)
+	prominence_values = np.load(file)
+	resampling_values = np.load(file)
+	kde_values = np.load(file)
+	metric_array = np.load(file)
 
+	print(prominence_values)
+
+
+plt.figure()
 plasma = cm.get_cmap('inferno', 12)
-p = ax.scatter(prominence_values, resampling_values, kde_values, c=metric_array, marker='o', cmap=plasma)
+p = plt.scatter(prominence_values, kde_values, c=np.log10(metric_array), marker='s', cmap=plasma, s=100)
 
-ax.set_xlabel("prominence_values")
-ax.set_ylabel("resampling_values rate")
-ax.set_zlabel("kde_values")
-ax.title.set_text("Prominence")
+plt.xlabel(r"$\rho$",fontsize=20)
+plt.ylabel(r"$B_W$",fontsize=20)
 
-fig.colorbar(p)
+t = plt.colorbar(p)
+t.set_label(r"$log(\gamma$)", rotation=90,fontsize=20)
+
+plt.show()

@@ -53,6 +53,9 @@ import scipy.special as sse
 
 import matplotlib.patches as patches
 
+
+plt.rcParams['text.usetex'] = True
+
 def expnorm_normalized(x,l,s,m):
     """
     Fits an exponentially modified gaussian (EMG), normalized (A=1)
@@ -144,14 +147,14 @@ def compute_max_expected_value(s, l, m, s_prime):
 	bounds_x = 1000
 	bounds_t = 1000
 
-	x_trials = np.linspace(-bounds_x, bounds_x, num=50000)
+	x_trials = np.linspace(-bounds_x, bounds_x, num=5000)
 
 	minimizing_Eh = 0
 	minimizing_Xh = 0
 
 	for x in x_trials:
 
-		t = np.linspace(-bounds_t,bounds_t, num=50000)
+		t = np.linspace(-bounds_t,bounds_t, num=5000)
 		f = 0.5*l*np.exp(0.5*l*(l*s*s-2*(x-t)))*sse.erfc((l*s*s-(x-t))/(np.sqrt(2)*s))  # exponential gaussian
 		g = (1/(s_prime*np.sqrt(2*np.pi)))*np.exp(-(1/2)*((t)**2)/(s_prime**2))
 		h = f*g
@@ -187,71 +190,79 @@ def get_distrib_at_infinity(s, l, m, s_prime, n_events):
 
     return distrib
 
+    
 
 
-n_events = 10
-n_draws = 1
+
+events_linspace = np.linspace(1,50,num=50)
 
 _lambda = 0.0659
 _sigma = 2.7118
-###lets first create our x space
-x = np.linspace(-200,200, num=10000)
-####we want to draw random gaussian times t
-
-###print an expmg with mu=0
-
-plt.figure()
-plt.plot(x,expnorm_normalized(x, _lambda, _sigma, 0))
-#plt.vlines( find_mode(_sigma, _lambda, 0), 0, 10)
-plt.title("expmg at x=0")
-plt.show()
-
-peaks = []
-
-for k in range(n_draws):
-
-    random_events = norm.rvs(loc=0, scale=9, size=int(n_events))
 
 
-    f = np.repeat(0.0, len(x))
+###
+#time_dist of 0.75 ns
 
+sigma_pulser_linspace = np.linspace(1, 4, num=3)
 
-    for i in range(n_events):
-        exp_mg = expnorm_normalized(x, _lambda, _sigma, random_events[i])
+sigma_pulser = 3
+mode = find_mode(_sigma, _lambda, 0)
+max_expn = expnorm_normalized(mode, _lambda, _sigma, 0)
 
-        for j in range(len(f)):
-
-            f[j] += exp_mg[j]
-
-    peaks.append(max(f))
-
-    plt.figure()
-    plt.plot(x,f)
-
-    #g = get_distrib_at_infinity(_sigma, _lambda, 0, 9, n_events)
-
-    #plt.plot(x, g, color="red")
-
-    #exp_val, x_exp_val = compute_max_expected_value(_sigma, _lambda, 0, 9)
-    #plt.vlines(x_exp_val, 0, n_events*exp_val)
-    plt.show()
-	
-
-
-hist, bins = np.histogram(peaks, density=True, bins=30)
-width = (bins[1] - bins[0])
-center = (bins[:-1] + bins[1:]) / 2
-
-
-###calculate expected peak
-print(compute_I2(_sigma, _lambda, 0, 9))
-
-exp_val, _ = compute_max_expected_value(_sigma, _lambda, 0, 9)
-#expected_value = compute_I2(_sigma, _lambda, 0, 9)*n_events
-
+n_draws = 1
 
 plt.figure()
-plt.bar(center, hist, align='center', width=width)
-plt.vlines(exp_val*n_events, 0, 10)
-plt.title("ampdist")
+
+for sigma_ in sigma_pulser_linspace:
+
+    peaks = []
+
+    for n_events in events_linspace:
+
+        peaks_before_averaging = []
+
+        for j in range(n_draws):
+
+            n_events=int(n_events)
+
+            
+            ###lets first create our x space
+            x = np.linspace(-200,200, num=10000)
+
+            
+
+            random_events = norm.rvs(loc=0, scale=sigma_, size=int(n_events))
+
+            f = np.repeat(0.0, len(x))
+
+            for i in range(n_events):
+
+                time_random_event = random_events[i]+norm.rvs(loc=0, scale=0.75, size=1)
+
+                exp_mg = expnorm_normalized(x, _lambda, _sigma, time_random_event)
+
+                for j in range(len(f)):
+
+                    f[j] += exp_mg[j]
+
+            peaks_before_averaging.append(max(f)/(n_events*max_expn))
+
+
+        peaks.append(np.mean(peaks_before_averaging))
+        peaks_before_averaging = []
+
+
+
+    exp_val, _ = compute_max_expected_value(_sigma, _lambda, 0, np.sqrt(sigma_**2+0.75**2))
+
+    color = np.random.rand(3,)
+
+
+    plt.plot(events_linspace, [x for x in peaks], label=r"$\sigma=$"+str(sigma_),color=color)
+    plt.plot(events_linspace, np.repeat(exp_val/max_expn, len(events_linspace)), '--', color=color)
+
+plt.legend(loc="lower left",fontsize=12)
+plt.grid()
+plt.xlabel(r"$\lambda_N$",fontsize=20)
+plt.ylabel(r"$\frac{s(h)}{\lambda_N}$",fontsize=20)
 plt.show()
