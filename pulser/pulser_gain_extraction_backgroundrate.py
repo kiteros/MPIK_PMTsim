@@ -8,6 +8,8 @@ import scipy.integrate as integrate
 
 import sys
 import os
+
+"""
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
@@ -20,7 +22,7 @@ sys.path.insert(0, p1+"\\debug_fcts")
 sys.path.insert(0, p1+"\\simulation")
 sys.path.insert(0, p1+"\\darkcounts")
 sys.path.insert(0, p1+"\\baselineshift")
-"""
+
 
 
 from pulser import Pulser
@@ -266,7 +268,7 @@ def calculate_J2(s, l, m):
 
 gain_linspace = np.linspace(4,16,num=5)
 
-brlinspace = np.logspace(4,10,num=8)
+brlinspace = np.logspace(4,9,num=5)
 
 plt.figure()
 
@@ -378,9 +380,9 @@ for gain in gain_linspace:
 
 
 	I_2 = compute_I2(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init.pulse_std)
-	theoretical_variance = pulser_init.pe_intensity*gain_linspace**2*(esim_init.ampStddev**2+1)*I_2+esim_init.background_rate*gain_linspace**2*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9
+	theoretical_variance = pulser_init.pe_intensity*gain**2*(esim_init.ampStddev**2+1)*I_2+esim_init.background_rate*gain_linspace**2*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9
 
-	theoretical_mean = calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)* gain_linspace*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
+	theoretical_mean = calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)* gain*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain_linspace ###we add the prominence as an offset
 
 
 	extracted_coeff = 1/((pulser_init.pe_intensity*(esim_init.ampStddev**2+1)*I_2
@@ -394,7 +396,7 @@ for gain in gain_linspace:
 
 	for i in range(len(mean_peaks)):
 		eta.append((standard_devs_peaks[i]**2)/(mean_peaks[i]-esim_init.offset))
-		eta_th.append((theoretical_variance[i])/(theoretical_mean[i]-esim_init.offset))
+		#eta_th.append((theoretical_variance)/(theoretical_mean-esim_init.offset))
 
 
 

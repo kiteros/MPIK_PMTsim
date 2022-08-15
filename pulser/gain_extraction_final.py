@@ -8,6 +8,8 @@ import scipy.integrate as integrate
 
 import sys
 import os
+
+"""
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
@@ -20,7 +22,7 @@ sys.path.insert(0, p1+"\\debug_fcts")
 sys.path.insert(0, p1+"\\simulation")
 sys.path.insert(0, p1+"\\darkcounts")
 sys.path.insert(0, p1+"\\baselineshift")
-"""
+
 
 
 from pulser import Pulser
@@ -254,7 +256,7 @@ def find_h(s, l, m, s_prime):
 	return minimizing_Xh
 
 
-brlinspace = np.logspace(9,9,num=1)
+brlinspace = np.logspace(3,9,num=5)
 
 gainlinspace = np.linspace(10,10,num=1)
 
@@ -289,7 +291,7 @@ for gain in gainlinspace:
             #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
             background_rate = background_rate_,
             gain=gain,
-            no_signal_duration = 1e5,
+            no_signal_duration = 1e4,
             noise=0.8,
         )
 

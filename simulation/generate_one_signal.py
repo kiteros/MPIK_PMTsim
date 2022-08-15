@@ -8,9 +8,23 @@ import scipy.integrate as integrate
 
 
 import sys
+import os
+
+"""
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/darkcounts')
+
+
+"""
+print(__file__)
+p1 = os.path.abspath(__file__+"/../../")
+sys.path.insert(0, p1+"\\debug_fcts")
+sys.path.insert(0, p1+"\\pulser")
+sys.path.insert(0, p1+"\\darkcounts")
+sys.path.insert(0, p1+"\\baselineshift")
+
+
 
 from pulser import Pulser
 import scipy
@@ -46,7 +60,7 @@ esim_init = TraceSimulation(
     ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
     timeSpec="../data/bb3_1700v_timing.txt",
     pulseShape="../data/pulse_FlashCam_7dynode_v2a.dat",
-    background_rate = 1e5,
+    background_rate = 1e8,
     gain=10,
     no_signal_duration = 1e4,
 
@@ -59,12 +73,26 @@ evts = pulse.generate_all()
 esim = TraceSimulation(
     ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
     timeSpec="../data/bb3_1700v_timing.txt",
-    pulseShape="../data/pulse_FlashCam_7dynode_v2a.dat",
-    background_rate = 1e4,
-    gain=18,
-    no_signal_duration = 1e6,
+    #pulseShape="../data/pulse_FlashCam_7dynode_v2a.dat",
+    background_rate = 1e8,
+    gain=10,
+    no_signal_duration = 1e4,
     noise=0.8,
 )
+
+plt.figure()
+plt.plot(*esim.ampSpec)
+plt.grid()
+plt.xlabel("Amplitude")
+plt.ylabel("Relative probability")
+
+plt.figure()
+plt.plot(*esim.pulseShape)
+plt.grid()
+plt.xlabel("Time [ns]")
+plt.ylabel("Relative amplitude")
+
+plt.show()
 
 evts_br, k_evts = esim.simulateBackground(evts)
 
@@ -82,10 +110,10 @@ plt.show()
 stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
 
 plt.figure()
-plt.plot(stimes, samples, label="gain=2, duration=1e5 ns")
+plt.plot(stimes, samples, label="gain=10")
 
-plt.xlabel("time ns")
-plt.ylabel("signal")
+plt.xlabel("Time [ns]")
+plt.ylabel("LSB")
 plt.legend(loc="upper right")
 
 
