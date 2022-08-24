@@ -8,7 +8,7 @@ import scipy.integrate as integrate
 
 import sys
 import os
-"""
+
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/simulation')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/debug_fcts')
 sys.path.insert(0, '/home/jebach/Documents/flashcam/pmt-trace-simulation-master/PMTtraceSIM_draft/baselineshift')
@@ -20,7 +20,7 @@ sys.path.insert(0, p1+"\\debug_fcts")
 sys.path.insert(0, p1+"\\simulation")
 sys.path.insert(0, p1+"\\darkcounts")
 sys.path.insert(0, p1+"\\baselineshift")
-
+"""
 
 from pulser import Pulser
 import scipy
@@ -60,10 +60,8 @@ from pulse_peak_histogram_2 import PeakHistogram
 from scipy import special
 import scipy.special as sse
 
-import latex
 
-
-#plt.rcParams['text.usetex'] = True
+plt.rcParams['text.usetex'] = True
 
 def expnorm_normalized(x,l,s,m):
     """
@@ -247,10 +245,10 @@ elif output_[1] == 1:
 
 
 
-brlinspace = np.logspace(4,11,num=2)
-brlinspace_darkcount = np.logspace(4,8.5,num=2)
+brlinspace = np.logspace(4,11,num=30)
+brlinspace_darkcount = np.logspace(4,8.5,num=30)
 
-gain=10
+gain=5
 
 
 plt.figure()
@@ -277,7 +275,7 @@ for background_rate_ in brlinspace_darkcount:
 	r = ph.get_relative_gain_array()[0]
 	extracted_gains.append(r)
 
-plt.semilogx(brlinspace_darkcount, extracted_gains, '--', label="Darkcounts")
+plt.semilogx(brlinspace_darkcount, extracted_gains, '--', label="Darkcounts, G=5")
 
 
 
@@ -322,7 +320,7 @@ for background_rate_ in brlinspace:
     r = (eta_exp/eta_th)/esim.gain
     extracted_gains.append(r)
 
-plt.semilogx(brlinspace, extracted_gains, label="Variance/Mean")
+plt.semilogx(brlinspace, extracted_gains, label="Variance/Mean, G=5")
 
 
 ##########Now lets do the flasher
@@ -453,22 +451,229 @@ for i in range(len(mean_peaks)):
 
 
 #plt.plot(gain_linspace, gain_linspace)
-plt.semilogx(brlinspace, [x*extracted_coeff/gain for x in eta], '-.', label="Pulser")
+plt.semilogx(brlinspace, [x*extracted_coeff/gain for x in eta], ':', label="Pulser, G=5")
+
+
+
+####second gain
+
+
+gain=13
 
 
 
 
+###Darkcounts
+
+extracted_gains = []
+for background_rate_ in brlinspace_darkcount:
+    ph = PeakHistogram(
+        noise=0.8,
+        background_rate=background_rate_,
+        gain_linspace=[gain],
+        graphs=False,
+        verbose=False,
+        prominence = output_[0],
+        window = window_,
+        resampling_rate=output_[2],
+        kde_banwidth=output_[3],
+        trace_lenght=1e5,
+
+    )
+
+    r = ph.get_relative_gain_array()[0]
+    extracted_gains.append(r)
+
+plt.semilogx(brlinspace_darkcount, extracted_gains, '--', label="Darkcounts, G=13")
+
+
+
+####Let's do the others
+
+extracted_gains = []
+for background_rate_ in brlinspace:
+
+    esim = TraceSimulation(
+        ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+        timeSpec="../data/bb3_1700v_timing.txt",
+        #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+        background_rate = background_rate_,
+        gain=gain,
+        no_signal_duration = 1e5,
+        noise=0.8,
+    )
+
+    pulse = Pulser(step=esim.t_step, duration=esim.no_signal_duration, pulse_type="none")
+    evts = pulse.generate_all()
+
+    
+    evts_br, k_evts = esim.simulateBackground(evts)
+
+    # pmt signal
+    times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+
+
+    eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
+
+
+    # adc signal
+    stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
+
+    eta_exp = np.std(samples)**2/(np.mean(samples)-esim.offset)
+    eta_th = (esim.ampStddev**2+1)*calculate_J2(esim.ps_sigma, esim.ps_lambda, 0)/esim.singePE_area_theoretical
+
+
+
+    #g_prime_mode = ((np.std(samples)**2)/(np.mean(samples)-esim.offset))*(esim.singePE_area_theoretical/((esim.ampStddev**2+1)*calculate_J2(esim.ps_sigma, esim.ps_lambda, 0)))
+    
+    r = (eta_exp/eta_th)/esim.gain
+    extracted_gains.append(r)
+
+plt.semilogx(brlinspace, extracted_gains, label="Variance/Mean, G=13")
+
+
+##########Now lets do the flasher
+
+standard_devs_peaks = []
+mean_peaks = []
+eta_peaks = []
+
+esim_init = TraceSimulation(
+    #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+    timeSpec="../data/bb3_1700v_timing.txt",
+    #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+    background_rate = 1e9,
+    gain=gain,
+    no_signal_duration = 1e5,
+    noise=1,
+)
+
+
+pulser_init = Pulser(step=esim_init.t_step, duration=esim_init.no_signal_duration, pulse_type="pulsed")
+print("pulser std", pulser_init.pulse_std)
+
+I_1 = compute_I1(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init)
+
+
+for j in brlinspace:
+
+    esim = TraceSimulation(
+        #ampSpec="../data/spe_R11920-RM_ap0.0002.dat",
+        timeSpec="../data/bb3_1700v_timing.txt",
+        #pulseShape="data/pulse_FlashCam_7dynode_v2a.dat",
+        background_rate = j,
+        gain=gain,
+        no_signal_duration = 1e5,
+        noise=0.8,
+    )
+
+    pulse = Pulser(step=esim.t_step,freq=5e6, duration=esim.no_signal_duration, pulse_type="pulsed")
+    evts = pulse.generate_all()
+
+    
+    evts_br, k_evts = esim.simulateBackground(evts)
+    times, pmtSig, uncertainty_pmt = esim.simulatePMTSignal(evts_br, k_evts) #TODO : make uncertainty from the simulatePMTSignal, with ampdist.rvs(). For now sufficient
+    eleSig, uncertainty_ele = esim.simulateElectronics(pmtSig, uncertainty_pmt, times)
+    stimes, samples, samples_unpro, uncertainty_sampled = esim.simulateADC(times, eleSig, uncertainty_ele, 1)
+    dt_resampling = stimes[2]-stimes[1]
+
+
+    maxs, _ = signal.find_peaks(samples, prominence=10) ###promeminence devrait dependre du gain ? Non
+    max_values_stimes = stimes[maxs]
+    max_values = samples[maxs]
+
+
+
+    ######A good way to do a simple calibration is for example to take the highest peak in the 10 percent of the signal
+    cal_index = np.argmax(samples[0:int(len(samples)*0.1)])
+    stimes_cal = stimes[cal_index]
+
+    
+    plt.figure()
+    plt.plot(stimes, samples)
+
+    plt.vlines(stimes_cal,200,600, color="g")
+
+    calibration = stimes_cal
+
+
+    period = (1.0/pulse.max_frequency)*(1e9) #In ns
+    number_pulses = int(pulse.duration // period)
+
+    width_region = period
+
+    maximums_stimes = []
+    maximums_values = []
+
+    for i in range(int(0.7*number_pulses)):##Making sure we dont overshoot the signal
+        i=i+1
+
+        upper_bound = calibration+i*period-stimes[0]+width_region/2
+        lower_bound = calibration+i*period-stimes[0]-width_region/2
+
+        upper_bound_n_sample = int(upper_bound//dt_resampling)
+        lower_bound_n_sample = int(lower_bound//dt_resampling)
+
+        plt.axvspan(stimes[lower_bound_n_sample], stimes[upper_bound_n_sample], alpha=0.5, color='red')
+
+        max_index = np.argmax(samples[lower_bound_n_sample:upper_bound_n_sample])+lower_bound_n_sample
+
+        maximums_values.append(samples[max_index])
+        maximums_stimes.append(stimes[max_index])
+
+    plt.scatter(maximums_stimes, maximums_values, marker='o', color='red')
+    plt.xlabel("time in ns" + str(i))
+    plt.ylabel("LSB")
+    plt.close()
+    
+    hist, bins = np.histogram(max_values, density=True, bins=30)
+    width = (bins[1] - bins[0])
+    center = (bins[:-1] + bins[1:]) / 2
+
+    mean_peaks.append(np.mean(maximums_values))
+    standard_devs_peaks.append(np.std(maximums_values))
+
+    eta_peaks.append(np.std(max_values)**2/(np.mean(max_values)-esim.offset-10))##Also removing the prominence
+
+
+
+I_2 = compute_I2(esim_init.ps_sigma, esim_init.ps_lambda, esim_init.ps_mu, pulser_init.pulse_std)
+theoretical_variance = pulser_init.pe_intensity*gain**2*(esim_init.ampStddev**2+1)*I_2+esim_init.background_rate*gain**2*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9
+
+theoretical_mean = calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)* gain*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.offset+esim_init.singePE_area*esim_init.background_rate*1e-9*gain ###we add the prominence as an offset
+
+
+extracted_coeff = 1/((pulser_init.pe_intensity*(esim_init.ampStddev**2+1)*I_2
+    +esim_init.background_rate*(esim_init.ampStddev**2+1)*calculate_J2(esim_init.ps_sigma, esim_init.ps_lambda, 0)*1e-9)/(calculate_A(esim_init.ps_sigma, esim_init.ps_lambda, 0)*(pulser_init.pe_intensity*0.027911767902802007)+esim_init.singePE_area*esim_init.background_rate*1e-9))
+
+
+eta = []
+eta_th = []
+
+gain_extracted = []
+
+for i in range(len(mean_peaks)):
+    eta.append((standard_devs_peaks[i]**2)/(mean_peaks[i]-esim_init.offset))
+    #eta_th.append((theoretical_variance)/(theoretical_mean-esim_init.offset))
+
+
+
+
+#plt.plot(gain_linspace, gain_linspace)
+plt.semilogx(brlinspace, [x*extracted_coeff/gain for x in eta], ':', label="Pulser, G=13")
+
+
+
+plt.semilogx(brlinspace, np.repeat(1, len(brlinspace)), label=r"$\frac{G'}{G}=1$", color="red")
 
 
 
 plt.legend(loc="upper left",fontsize=12)
 
-"""
+
 plt.xlabel(r"$f_{NSB}$[Hz]",fontsize=15)
 plt.ylabel(r"$\frac{G'}{G}$",fontsize=15)
-"""
-plt.xlabel("Background rate")
-plt.ylabel("G'/G")
+
 plt.grid()
 
 
